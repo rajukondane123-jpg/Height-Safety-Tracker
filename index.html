@@ -33,11 +33,16 @@
 
 <main class="layout">
 
-  <section class="panel roster-panel">
-    <div class="panel-head">
-      <span class="eyebrow">01 · ROSTER</span>
-      <h2>Group</h2>
+      <div class="panel-head">
+      <span class="eyebrow">01 · ROSTER & GROUP CODE</span>
+      <h2>Join a Private Group</h2>
+      <div class="field-row" style="margin-bottom: 15px;">
+        <input type="text" id="groupCodeInput" placeholder="Enter Group Code (e.g., TEAM123)" value="TEAM123">
+        <button type="button" id="joinRoomBtn" class="btn btn-ghost">Join Room</button>
+      </div>
       <p>Add each person's reading, then compare them against the group.</p>
+      </div>
+  
     </div>
 
     <form id="addForm" class="add-form" autocomplete="off">
