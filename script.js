@@ -1,19 +1,27 @@
 /* ============================================================
    ALTIGUARD
    Group elevation tracking + sudden-drop alerting.
-   Pure client-side: everything lives in localStorage, nothing
-   is sent anywhere. Safe to host as a static site (GitHub Pages).
+
+   Two modes:
+   - Local mode (default): everything lives in this browser's
+     localStorage. One device, manually logging readings for
+     the group. Works fully offline once loaded.
+   - Session mode (optional, needs firebase-config.js filled
+     in): each phone joins a shared session and reports its
+     own live GPS. Everyone sees everyone, and a drop anywhere
+     alerts every connected phone. Needs an internet connection.
    ============================================================ */
 
 (function () {
   "use strict";
 
-  /* ---------------- storage ---------------- */
+  /* ---------------- storage (local mode) ---------------- */
 
   const STORAGE = {
     group: "altiguard_group_v1",
     settings: "altiguard_settings_v1",
     alerts: "altiguard_alerts_v1",
+    lastName: "altiguard_last_name",
   };
 
   function loadJSON(key, fallback) {
@@ -35,7 +43,7 @@
 
   /* ---------------- state ---------------- */
 
-  let group = loadJSON(STORAGE.group, []);
+  let group = loadJSON(STORAGE.group, []); // local-mode roster
   let settings = loadJSON(STORAGE.settings, {
     limit: 2,
     dropThreshold: 1.5,
@@ -46,17 +54,29 @@
   let manualMode = false;
   let pendingCapture = null; // { lat, lon, height, accuracy, method }
 
+  // local-mode live tracking (one person, tracked from this device)
   let livePersonId = null;
   let watchId = null;
-  let liveHistory = []; // [{ t, h }] for the live-tracked person
+  let liveHistory = [];
+  let liveSmoothBuffer = [];
+
+  // session-mode state
+  let sessionActive = false;
+  let sessionPeople = []; // raw list from Firebase
+  let sessionWatchId = null;
+  let sessionLiveHistory = [];
+  let sessionSmoothBuffer = [];
+  let selfBaroRef;
+  let selfLastHeight = null;
+  let selfName = "";
 
   let baroSensor = null;
-  let baroBaseline = null; // reference pressure (hPa) captured at start
+  let baroBaseline = null;
 
   let audioCtx = null;
   let bannerTimeout = null;
 
-  /* ---------------- helpers ---------------- */
+  /* ---------------- generic helpers ---------------- */
 
   function uid() {
     return "p_" + Math.random().toString(36).slice(2, 9) + Date.now().toString(36);
@@ -69,14 +89,23 @@
   }
 
   function fmtSigned(n, digits) {
-    const v = n.toFixed(digits);
-    return (n >= 0 ? "+" : "") + v;
+    return (n >= 0 ? "+" : "") + n.toFixed(digits);
   }
 
-  function computeGroupMean() {
-    if (group.length === 0) return null;
-    const sum = group.reduce((acc, p) => acc + p.height, 0);
-    return sum / group.length;
+  function fmtHeight(h) {
+    return typeof h === "number" ? h.toFixed(2) + " m" : "waiting for reading\u2026";
+  }
+
+  function niceStep(maxVal) {
+    const rough = maxVal / 4;
+    const mag = Math.pow(10, Math.floor(Math.log10(rough || 1)));
+    const norm = rough / mag;
+    let step;
+    if (norm < 1.5) step = 1 * mag;
+    else if (norm < 3) step = 2 * mag;
+    else if (norm < 7) step = 5 * mag;
+    else step = 10 * mag;
+    return step || 1;
   }
 
   function statusFor(rel) {
@@ -96,20 +125,84 @@
       case "gps+barometer-ready": return "GPS altitude";
       case "gps-no-altitude": return "GPS (no altitude)";
       case "manual": return "Manual entry";
+      case "pending": return "Waiting for first reading";
       default: return method || "Unknown";
     }
   }
 
-  function niceStep(maxVal) {
-    const rough = maxVal / 4;
-    const mag = Math.pow(10, Math.floor(Math.log10(rough || 1)));
-    const norm = rough / mag;
-    let step;
-    if (norm < 1.5) step = 1 * mag;
-    else if (norm < 3) step = 2 * mag;
-    else if (norm < 7) step = 5 * mag;
-    else step = 10 * mag;
-    return step || 1;
+  // Median-of-3 smoothing: rejects a single jittery GPS spike without
+  // meaningfully lagging behind a real, sustained change in height.
+  function pushSmoothed(buffer, rawValue) {
+    buffer.push(rawValue);
+    if (buffer.length > 3) buffer.shift();
+    if (buffer.length < 3) return buffer.reduce((a, b) => a + b, 0) / buffer.length;
+    const sorted = [...buffer].sort((a, b) => a - b);
+    return sorted[1];
+  }
+
+  // Shared drop-detection: compares the smoothed current height against
+  // the peak seen within the configured time window.
+  function checkDropGeneric(historyArr, smoothedHeight, accuracy) {
+    const now = Date.now();
+    historyArr.push({ t: now, h: smoothedHeight });
+    const windowMs = settings.dropWindow * 1000;
+    while (historyArr.length && now - historyArr[0].t > windowMs + 2000) historyArr.shift();
+    const inWindow = historyArr.filter((r) => now - r.t <= windowMs);
+    if (inWindow.length < 2) return { triggered: false };
+    const peak = Math.max(...inWindow.map((r) => r.h));
+    const drop = peak - smoothedHeight;
+    if (drop >= settings.dropThreshold) {
+      historyArr.length = 0;
+      historyArr.push({ t: now, h: smoothedHeight });
+      const lowConfidence = typeof accuracy === "number" && accuracy > settings.dropThreshold * 2;
+      return { triggered: true, drop, lowConfidence };
+    }
+    return { triggered: false };
+  }
+
+  function haversineMeters(lat1, lon1, lat2, lon2) {
+    const R = 6371000;
+    const toRad = (d) => (d * Math.PI) / 180;
+    const dLat = toRad(lat2 - lat1);
+    const dLon = toRad(lon2 - lon1);
+    const a = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
+    return 2 * R * Math.asin(Math.sqrt(a));
+  }
+
+  function bearingDegrees(lat1, lon1, lat2, lon2) {
+    const toRad = (d) => (d * Math.PI) / 180;
+    const toDeg = (r) => (r * 180) / Math.PI;
+    const y = Math.sin(toRad(lon2 - lon1)) * Math.cos(toRad(lat2));
+    const x = Math.cos(toRad(lat1)) * Math.sin(toRad(lat2)) - Math.sin(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.cos(toRad(lon2 - lon1));
+    return (toDeg(Math.atan2(y, x)) + 360) % 360;
+  }
+
+  function compassLabel(deg) {
+    const dirs = ["N", "NNE", "NE", "ENE", "E", "ESE", "SE", "SSE", "S", "SSW", "SW", "WSW", "W", "WNW", "NW", "NNW"];
+    return dirs[Math.round(deg / 22.5) % 16];
+  }
+
+  function distanceLabel(meters) {
+    return meters < 1000 ? Math.round(meters) + " m" : (meters / 1000).toFixed(2) + " km";
+  }
+
+  /* ---------------- roster abstraction (local vs session) ---------------- */
+
+  function getActiveRoster() {
+    if (!sessionActive) return group;
+    const now = Date.now();
+    return sessionPeople.filter((p) => p.reference || now - (p.updatedAt || 0) < 45000);
+  }
+
+  function computeGroupMean(roster) {
+    const real = roster.filter((p) => !p.reference && typeof p.height === "number");
+    if (real.length === 0) return null;
+    return real.reduce((a, p) => a + p.height, 0) / real.length;
+  }
+
+  function isPersonLive(p) {
+    if (sessionActive) return !p.reference && Date.now() - (p.updatedAt || 0) < 45000;
+    return p.id === livePersonId;
   }
 
   /* ---------------- audio + haptics ---------------- */
@@ -118,9 +211,7 @@
     try {
       audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
       if (audioCtx.state === "suspended") audioCtx.resume();
-    } catch (e) {
-      /* Web Audio unavailable — visual + vibration alerts still work */
-    }
+    } catch (e) { /* Web Audio unavailable — visual + vibration alerts still work */ }
   }
 
   function beep() {
@@ -152,7 +243,7 @@
     }
   }
 
-  /* ---------------- barometer ---------------- */
+  /* ---------------- barometer (shared by local + session tracking) ---------------- */
 
   function pressureToRelativeAltitude(currentHPa, baseHPa) {
     return 44330 * (1 - Math.pow(currentHPa / baseHPa, 1 / 5.255));
@@ -160,7 +251,7 @@
 
   async function initBarometer() {
     if (!("Barometer" in window)) {
-      setBaroStatus("off", "Not supported in this browser — using GPS altitude instead.");
+      setBaroStatus("off", "Not supported in this browser \u2014 using GPS altitude instead.");
       return;
     }
     try {
@@ -168,7 +259,7 @@
         try {
           const status = await navigator.permissions.query({ name: "barometer" });
           if (status.state === "denied") {
-            setBaroStatus("off", "Permission denied — using GPS altitude instead.");
+            setBaroStatus("off", "Permission denied \u2014 using GPS altitude instead.");
             return;
           }
         } catch (e) { /* 'barometer' may not be queryable — try instantiating anyway */ }
@@ -177,16 +268,16 @@
       baroSensor = new Barometer({ frequency: 1 });
       baroSensor.addEventListener("reading", () => {
         if (baroBaseline === null) baroBaseline = baroSensor.pressure;
-        setBaroStatus("on", "Active — refining live readings.");
+        setBaroStatus("on", "Active \u2014 refining live readings.");
       });
       baroSensor.addEventListener("error", (e) => {
         baroSensor = null;
         const denied = e.error && e.error.name === "NotAllowedError";
-        setBaroStatus("off", denied ? "Permission denied — using GPS altitude instead." : "Unavailable on this device — using GPS altitude instead.");
+        setBaroStatus("off", denied ? "Permission denied \u2014 using GPS altitude instead." : "Unavailable on this device \u2014 using GPS altitude instead.");
       });
       baroSensor.start();
     } catch (e) {
-      setBaroStatus("off", "Not available on this device — using GPS altitude instead.");
+      setBaroStatus("off", "Not available on this device \u2014 using GPS altitude instead.");
     }
   }
 
@@ -212,8 +303,9 @@
   function setGpsStatus(state, title) { setPill("gpsPill", "gpsLed", state, title); }
   function setBaroStatus(state, title) { setPill("baroPill", "baroLed", state, title); }
   function setLiveStatus(state, title) { setPill("livePill", "liveLed", state, title); }
+  function setSyncStatus(state, title) { setPill("syncPill", "syncLed", state, title); }
 
-  /* ---------------- capture (one-off) ---------------- */
+  /* ---------------- local mode: one-off capture ---------------- */
 
   function capture() {
     const readout = document.getElementById("captureReadout");
@@ -272,7 +364,7 @@
     updateAddButtonState();
   }
 
-  /* ---------------- live tracking ---------------- */
+  /* ---------------- local mode: live tracking one roster member ---------------- */
 
   function startTracking(id) {
     if (!navigator.geolocation) {
@@ -283,6 +375,7 @@
     unlockAudio();
     livePersonId = id;
     liveHistory = [];
+    liveSmoothBuffer = [];
     watchId = navigator.geolocation.watchPosition(onLiveUpdate, onLiveError, {
       enableHighAccuracy: true, maximumAge: 0, timeout: 20000,
     });
@@ -297,7 +390,8 @@
     }
     livePersonId = null;
     liveHistory = [];
-    setLiveStatus("off");
+    liveSmoothBuffer = [];
+    setLiveStatus(sessionActive ? "on" : "off");
     render();
   }
 
@@ -309,30 +403,34 @@
     setGpsStatus("on", "GPS fix acquired.");
 
     let method = "gps";
-    let height;
+    let rawHeight;
     const baroDelta = currentBaroDelta();
 
     if (baroDelta !== null) {
       if (person._baroRef === undefined) {
-        person._baroRef = (altitude !== null && altitude !== undefined ? altitude : (person.height ?? 0)) - baroDelta;
+        person._baroRef = (altitude !== null && altitude !== undefined ? altitude : person.height ?? 0) - baroDelta;
       }
-      height = person._baroRef + baroDelta;
+      rawHeight = person._baroRef + baroDelta;
       method = "barometer";
     } else if (altitude !== null && altitude !== undefined) {
-      height = altitude;
+      rawHeight = altitude;
     } else {
-      height = person.height ?? 0;
+      rawHeight = person.height ?? 0;
       method = "gps-no-altitude";
     }
 
+    const smoothed = pushSmoothed(liveSmoothBuffer, rawHeight);
+
     person.lat = latitude;
     person.lon = longitude;
-    person.height = height;
+    person.height = smoothed;
     person.accuracy = accuracy;
     person.method = method;
     person.updatedAt = new Date().toISOString();
 
-    checkDrop(person);
+    const dropInfo = checkDropGeneric(liveHistory, smoothed, accuracy);
+    if (dropInfo.triggered) triggerAlert(person, dropInfo.drop, false, dropInfo.lowConfidence);
+
     saveJSON(STORAGE.group, group);
     render();
   }
@@ -341,25 +439,74 @@
     showAlertBanner("Location error: " + (err.message || "unable to get position"));
   }
 
-  function checkDrop(person) {
-    const now = Date.now();
-    liveHistory.push({ t: now, h: person.height });
-    const windowMs = settings.dropWindow * 1000;
-    liveHistory = liveHistory.filter((r) => now - r.t <= windowMs + 2000);
-    const inWindow = liveHistory.filter((r) => now - r.t <= windowMs);
-    if (inWindow.length < 2) return;
+  /* ---------------- session mode: self tracking ---------------- */
 
-    const peak = Math.max(...inWindow.map((r) => r.h));
-    const drop = peak - person.height;
-    if (drop >= settings.dropThreshold) {
-      triggerAlert(person, drop, false);
-      liveHistory = [{ t: now, h: person.height }];
+  function startSelfSessionTracking() {
+    if (!navigator.geolocation) {
+      showAlertBanner("Geolocation isn\u2019t supported in this browser.");
+      return;
+    }
+    if (sessionWatchId !== null) return;
+    unlockAudio();
+    sessionLiveHistory = [];
+    sessionSmoothBuffer = [];
+    selfBaroRef = undefined;
+    sessionWatchId = navigator.geolocation.watchPosition(onSessionSelfUpdate, onLiveError, {
+      enableHighAccuracy: true, maximumAge: 0, timeout: 20000,
+    });
+    setLiveStatus("on", "Sharing your live position with the session.");
+  }
+
+  function stopSelfSessionTracking() {
+    if (sessionWatchId !== null) {
+      navigator.geolocation.clearWatch(sessionWatchId);
+      sessionWatchId = null;
+    }
+    setLiveStatus("off");
+  }
+
+  function onSessionSelfUpdate(pos) {
+    const { latitude, longitude, altitude, accuracy } = pos.coords;
+    setGpsStatus("on", "GPS fix acquired.");
+
+    let method = "gps";
+    let rawHeight;
+    const baroDelta = currentBaroDelta();
+
+    if (baroDelta !== null) {
+      if (selfBaroRef === undefined) {
+        selfBaroRef = (altitude !== null && altitude !== undefined ? altitude : selfLastHeight ?? 0) - baroDelta;
+      }
+      rawHeight = selfBaroRef + baroDelta;
+      method = "barometer";
+    } else if (altitude !== null && altitude !== undefined) {
+      rawHeight = altitude;
+    } else {
+      rawHeight = selfLastHeight ?? 0;
+      method = "gps-no-altitude";
+    }
+
+    const smoothed = pushSmoothed(sessionSmoothBuffer, rawHeight);
+    selfLastHeight = smoothed;
+
+    window.AltiguardSync.pushSelfReading({ name: selfName, lat: latitude, lon: longitude, height: smoothed, accuracy, method });
+
+    const dropInfo = checkDropGeneric(sessionLiveHistory, smoothed, accuracy);
+    if (dropInfo.triggered) {
+      triggerAlert({ id: window.AltiguardSync.selfId, name: selfName }, dropInfo.drop, false, dropInfo.lowConfidence);
+      window.AltiguardSync.pushAlert({
+        name: selfName,
+        personId: window.AltiguardSync.selfId,
+        drop: Number(dropInfo.drop.toFixed(2)),
+        time: Date.now(),
+        lowConfidence: dropInfo.lowConfidence,
+      });
     }
   }
 
   /* ---------------- alerts ---------------- */
 
-  function triggerAlert(person, dropAmount, isTest) {
+  function triggerAlert(person, dropAmount, isTest, lowConfidence) {
     const entry = {
       id: uid(),
       name: person ? person.name : "Test person",
@@ -367,15 +514,40 @@
       drop: Number(dropAmount.toFixed(2)),
       time: new Date().toISOString(),
       test: !!isTest,
+      lowConfidence: !!lowConfidence,
     };
     alerts.unshift(entry);
     if (alerts.length > 50) alerts.length = 50;
     saveJSON(STORAGE.alerts, alerts);
     renderLog();
-    showAlertBanner(`${isTest ? "[TEST] " : ""}\u26a0 Sudden height drop \u2014 ${entry.name} dropped ${entry.drop} m`);
+    const prefix = isTest ? "[TEST] " : lowConfidence ? "\u26a0 Possible drop (low GPS confidence) \u2014 " : "\u26a0 Sudden height drop \u2014 ";
+    showAlertBanner(`${prefix}${entry.name} dropped ${entry.drop} m`);
     vibrate();
     beep();
     if (person) flashFigure(person.id);
+  }
+
+  // Effects for a drop detected on ANOTHER device, received via sync.
+  function handleIncomingAlert(remote) {
+    if (remote.personId && remote.personId === window.AltiguardSync.selfId) return; // echo of our own push
+    const entry = {
+      id: uid(),
+      name: remote.name || "Someone",
+      personId: remote.personId || null,
+      drop: remote.drop,
+      time: new Date(remote.time || Date.now()).toISOString(),
+      test: false,
+      lowConfidence: !!remote.lowConfidence,
+    };
+    alerts.unshift(entry);
+    if (alerts.length > 50) alerts.length = 50;
+    saveJSON(STORAGE.alerts, alerts);
+    renderLog();
+    const prefix = entry.lowConfidence ? "\u26a0 Possible drop (low GPS confidence) \u2014 " : "\u26a0 Sudden height drop \u2014 ";
+    showAlertBanner(`${prefix}${entry.name} dropped ${entry.drop} m`);
+    vibrate();
+    beep();
+    if (entry.personId) flashFigure(entry.personId);
   }
 
   function showAlertBanner(msg) {
@@ -388,251 +560,4 @@
 
   function flashFigure(id) {
     const el = document.querySelector(`.figure[data-person-id="${id}"]`);
-    if (!el) return;
-    el.classList.add("figure-flash");
-    setTimeout(() => el.classList.remove("figure-flash"), 4000);
-  }
-
-  /* ---------------- rendering ---------------- */
-
-  function render() {
-    renderRoster();
-    renderGraph();
-    renderLog();
-  }
-
-  function renderRoster() {
-    const list = document.getElementById("rosterList");
-    const emptyHint = document.getElementById("emptyHint");
-    if (group.length === 0) {
-      list.innerHTML = "";
-      emptyHint.hidden = false;
-      return;
-    }
-    emptyHint.hidden = true;
-    const mean = computeGroupMean();
-
-    list.innerHTML = group.map((p) => {
-      const rel = p.height - mean;
-      const status = statusFor(rel);
-      const isLive = p.id === livePersonId;
-      const coords = (p.lat !== null && p.lat !== undefined && p.lon !== null && p.lon !== undefined)
-        ? `${p.lat.toFixed(5)}, ${p.lon.toFixed(5)}` : "No GPS coordinates";
-
-      return `
-      <li class="roster-item ${isLive ? "is-live" : ""}">
-        <div class="roster-info">
-          <strong>${escapeHtml(p.name)}</strong>
-          <span class="roster-sub">${p.height.toFixed(2)} m \u00b7 ${methodLabelFor(p.method)}</span>
-          <span class="roster-coords">${coords}</span>
-        </div>
-        <div class="roster-status status-${status}">${fmtSigned(rel, 2)} m<small>${statusLabel(status)}</small></div>
-        <div class="roster-actions">
-          <button class="mini-btn track-btn ${isLive ? "active" : ""}" data-id="${p.id}">${isLive ? "\u23f9 Stop" : "\ud83c\udfaf Track"}</button>
-          <button class="mini-btn remove-btn" data-id="${p.id}" aria-label="Remove ${escapeHtml(p.name)}">\u2715</button>
-        </div>
-      </li>`;
-    }).join("");
-  }
-
-  function figureSVG(x, y, status, isLive, name, rel, id) {
-    const cls = `figure figure-${status}${isLive ? " figure-live" : ""}`;
-    return `
-    <g class="${cls}" data-person-id="${id}" transform="translate(${x.toFixed(1)},${y.toFixed(1)})">
-      ${isLive ? '<circle class="live-halo" r="14"></circle>' : ""}
-      <text class="figure-readout" x="0" y="-28" text-anchor="middle">${fmtSigned(rel, 2)}m</text>
-      <circle class="figure-head" cx="0" cy="-14" r="6"></circle>
-      <line class="figure-body" x1="0" y1="-8" x2="0" y2="10"></line>
-      <line class="figure-arm" x1="0" y1="-3" x2="-9" y2="6"></line>
-      <line class="figure-arm" x1="0" y1="-3" x2="9" y2="6"></line>
-      <line class="figure-leg" x1="0" y1="10" x2="-8" y2="25"></line>
-      <line class="figure-leg" x1="0" y1="10" x2="8" y2="25"></line>
-      <text class="figure-label" x="0" y="39" text-anchor="middle">${escapeHtml(name)}</text>
-    </g>`;
-  }
-
-  function renderGraph() {
-    const svg = document.getElementById("graphSvg");
-    const W = 640, H = 380;
-    const marginL = 58, marginR = 20, marginT = 20, marginB = 46;
-    const plotW = W - marginL - marginR;
-    const plotH = H - marginT - marginB;
-    const midY = marginT + plotH / 2;
-
-    if (group.length === 0) {
-      svg.innerHTML = `<text x="${W / 2}" y="${H / 2}" text-anchor="middle" class="graph-empty">Add people to see the elevation profile</text>`;
-      return;
-    }
-
-    const mean = computeGroupMean();
-    const rels = group.map((p) => p.height - mean);
-    const maxAbs = Math.max(settings.limit * 1.2, ...rels.map((r) => Math.abs(r)), 1);
-    const scale = (plotH / 2) / maxAbs;
-    const step = niceStep(maxAbs);
-
-    const parts = [];
-
-    for (let v = step; v <= maxAbs + 0.0001; v += step) {
-      [v, -v].forEach((val) => {
-        const y = midY - val * scale;
-        if (y < marginT - 2 || y > marginT + plotH + 2) return;
-        parts.push(`<line class="grid-line" x1="${marginL}" y1="${y.toFixed(1)}" x2="${marginL + plotW}" y2="${y.toFixed(1)}"></line>`);
-        parts.push(`<text class="axis-label" x="${marginL - 8}" y="${(y + 3).toFixed(1)}" text-anchor="end">${val > 0 ? "+" : ""}${val.toFixed(step < 1 ? 1 : 0)}</text>`);
-      });
-    }
-
-    const limitYTop = midY - settings.limit * scale;
-    const limitYBot = midY + settings.limit * scale;
-    parts.push(`<line class="limit-line" x1="${marginL}" y1="${limitYTop.toFixed(1)}" x2="${marginL + plotW}" y2="${limitYTop.toFixed(1)}"></line>`);
-    parts.push(`<line class="limit-line" x1="${marginL}" y1="${limitYBot.toFixed(1)}" x2="${marginL + plotW}" y2="${limitYBot.toFixed(1)}"></line>`);
-
-    parts.push(`<line class="baseline" x1="${marginL}" y1="${midY.toFixed(1)}" x2="${marginL + plotW}" y2="${midY.toFixed(1)}"></line>`);
-    parts.push(`<text class="baseline-label" x="${marginL + plotW}" y="${(midY - 8).toFixed(1)}" text-anchor="end">GROUP LEVEL \u00b7 0 m</text>`);
-    parts.push(`<text class="axis-label" x="${marginL - 8}" y="${(midY + 3).toFixed(1)}" text-anchor="end">0</text>`);
-
-    const n = group.length;
-    group.forEach((p, i) => {
-      const rel = p.height - mean;
-      const x = marginL + (plotW * (i + 0.5)) / n;
-      const y = midY - rel * scale;
-      const status = statusFor(rel);
-      const isLive = p.id === livePersonId;
-      parts.push(figureSVG(x, y, status, isLive, p.name, rel, p.id));
-    });
-
-    svg.innerHTML = parts.join("");
-  }
-
-  function renderLog() {
-    const list = document.getElementById("logList");
-    const hint = document.getElementById("logEmptyHint");
-    if (alerts.length === 0) {
-      list.innerHTML = "";
-      hint.hidden = false;
-      return;
-    }
-    hint.hidden = true;
-    list.innerHTML = alerts.slice(0, 20).map((a) => {
-      const time = new Date(a.time).toLocaleTimeString();
-      return `<li class="log-item ${a.test ? "is-test" : ""}">
-        <span class="log-time">${time}</span>
-        <span class="log-text">${a.test ? "[TEST] " : ""}${escapeHtml(a.name)} dropped <strong>${a.drop} m</strong></span>
-      </li>`;
-    }).join("");
-  }
-
-  /* ---------------- wiring ---------------- */
-
-  function init() {
-    document.getElementById("limitInput").value = settings.limit;
-    document.getElementById("dropInput").value = settings.dropThreshold;
-    document.getElementById("windowInput").value = settings.dropWindow;
-
-    setGpsStatus(navigator.geolocation ? "off" : "danger", navigator.geolocation ? "Not yet used." : "Not supported in this browser.");
-    setBaroStatus("off", "Checking\u2026");
-    setLiveStatus("off");
-    initBarometer();
-
-    document.getElementById("captureBtn").addEventListener("click", capture);
-
-    document.getElementById("manualToggle").addEventListener("click", () => {
-      manualMode = !manualMode;
-      document.getElementById("manualFields").hidden = !manualMode;
-      document.getElementById("manualToggle").textContent = manualMode ? "Use GPS instead" : "Enter manually";
-      updateAddButtonState();
-    });
-
-    document.getElementById("manualHeight").addEventListener("input", updateAddButtonState);
-
-    document.getElementById("addForm").addEventListener("submit", (e) => {
-      e.preventDefault();
-      const name = document.getElementById("nameInput").value.trim();
-      if (!name) return;
-
-      let personData;
-      if (manualMode) {
-        const h = parseFloat(document.getElementById("manualHeight").value);
-        if (isNaN(h)) return;
-        const lat = parseFloat(document.getElementById("manualLat").value);
-        const lon = parseFloat(document.getElementById("manualLon").value);
-        personData = { lat: isNaN(lat) ? null : lat, lon: isNaN(lon) ? null : lon, height: h, accuracy: null, method: "manual" };
-      } else {
-        if (!pendingCapture || pendingCapture.height === null || pendingCapture.height === undefined) return;
-        personData = pendingCapture;
-      }
-
-      group.push({
-        id: uid(),
-        name,
-        lat: personData.lat,
-        lon: personData.lon,
-        height: personData.height,
-        accuracy: personData.accuracy,
-        method: personData.method,
-        addedAt: new Date().toISOString(),
-      });
-      saveJSON(STORAGE.group, group);
-      resetForm();
-      render();
-    });
-
-    document.getElementById("rosterList").addEventListener("click", (e) => {
-      const trackBtn = e.target.closest(".track-btn");
-      const removeBtn = e.target.closest(".remove-btn");
-      if (trackBtn) {
-        const id = trackBtn.dataset.id;
-        if (livePersonId === id) stopTracking(); else startTracking(id);
-      } else if (removeBtn) {
-        const id = removeBtn.dataset.id;
-        if (livePersonId === id) stopTracking();
-        group = group.filter((p) => p.id !== id);
-        saveJSON(STORAGE.group, group);
-        render();
-      }
-    });
-
-    document.getElementById("limitInput").addEventListener("input", (e) => {
-      const v = parseFloat(e.target.value);
-      if (!isNaN(v) && v > 0) { settings.limit = v; saveJSON(STORAGE.settings, settings); render(); }
-    });
-    document.getElementById("dropInput").addEventListener("input", (e) => {
-      const v = parseFloat(e.target.value);
-      if (!isNaN(v) && v > 0) { settings.dropThreshold = v; saveJSON(STORAGE.settings, settings); }
-    });
-    document.getElementById("windowInput").addEventListener("input", (e) => {
-      const v = parseFloat(e.target.value);
-      if (!isNaN(v) && v > 0) { settings.dropWindow = v; saveJSON(STORAGE.settings, settings); }
-    });
-
-    document.getElementById("testAlertBtn").addEventListener("click", () => {
-      unlockAudio();
-      const person = group.find((p) => p.id === livePersonId) || group[0] || null;
-      triggerAlert(person, Math.max(settings.dropThreshold, 1.5) + 0.3, true);
-    });
-
-    document.getElementById("exportBtn").addEventListener("click", () => {
-      const data = JSON.stringify({ group, settings, alerts, exportedAt: new Date().toISOString() }, null, 2);
-      const blob = new Blob([data], { type: "application/json" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `altiguard-export-${Date.now()}.json`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-    });
-
-    document.getElementById("clearBtn").addEventListener("click", () => {
-      if (!confirm("Clear the entire group? This cannot be undone.")) return;
-      stopTracking();
-      group = [];
-      saveJSON(STORAGE.group, group);
-      render();
-    });
-
-    render();
-  }
-
-  document.addEventListener("DOMContentLoaded", init);
-})();
+    if 
