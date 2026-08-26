@@ -659,44 +659,51 @@
 
   document.addEventListener("DOMContentLoaded", init);
 
-  /* ---------------- google maps ---------------- */
-  let map;
+    /* ---------------- free openstreetmap (Leaflet) ---------------- */
+  let map = null;
+  let markerGroup = null;
   let markers = {};
 
-  window.initMap = function () {
-    map = new google.maps.Map(document.getElementById("map"), {
-      center: { lat: 20.5937, lng: 78.9629 }, // Default center (India)
-      zoom: 5,
-      mapTypeId: 'terrain'
-    });
-    renderMap();
-  };
+  function initMap() {
+    if (map) return; // Map already loaded
+    
+    // Initialize map centered on India
+    map = L.map('map').setView([20.5937, 78.9629], 5);
+
+    // Load the free OpenStreetMap tiles
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      maxZoom: 19,
+      attribution: '© OpenStreetMap contributors'
+    }).addTo(map);
+
+    markerGroup = L.featureGroup().addTo(map);
+  }
 
   function renderMap() {
-    if (!map) return;
+    if (!document.getElementById("map")) return;
+    if (!map) initMap(); // Load map on first render
     
-    Object.values(markers).forEach(m => m.setMap(null));
+    // Clear old markers
+    markerGroup.clearLayers();
     markers = {};
 
-    let bounds = new google.maps.LatLngBounds();
     let hasValidCoords = false;
 
+    // Loop through the group and place a pin for everyone with GPS
     group.forEach(p => {
       if (p.lat && p.lon) {
-        const pos = { lat: p.lat, lng: p.lon };
-        const marker = new google.maps.Marker({
-          position: pos,
-          map: map,
-          title: p.name,
-          label: p.name.charAt(0).toUpperCase()
-        });
+        // Create marker and add a popup with their name
+        const marker = L.marker([p.lat, p.lon]).bindPopup(`<b>${escapeHtml(p.name)}</b>`);
+        markerGroup.addLayer(marker);
         markers[p.id] = marker;
-        bounds.extend(pos);
         hasValidCoords = true;
       }
     });
 
-    if (hasValidCoords) map.fitBounds(bounds);
+    // Auto-zoom to fit everyone on screen
+    if (hasValidCoords) {
+      map.fitBounds(markerGroup.getBounds(), { padding: [30, 30], maxZoom: 15 });
+    }
   }
 
 })();
