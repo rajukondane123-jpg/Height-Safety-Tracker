@@ -4,8 +4,15 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Altiguard — Group Elevation &amp; Fall-Alert Tracker</title>
-<meta name="description" content="Track each person's height relative to the group average, watch it on a live elevation graph, and get alerted on sudden drops.">
+<meta name="description" content="Track each person's height relative to the group average, watch it on a live elevation graph, and get alerted on sudden drops — solo, or synced live across everyone's phone.">
 <meta name="theme-color" content="#0A0F1C">
+
+<link rel="manifest" href="manifest.json">
+<link rel="icon" type="image/x-icon" href="icons/favicon.ico">
+<link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="icons/favicon-16.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=JetBrains+Mono:wght@400;500;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
@@ -24,8 +31,9 @@
   </div>
   <div class="status-strip">
     <div class="status-pill" id="gpsPill" title="GPS availability"><span class="led" id="gpsLed"></span>GPS</div>
-    <div class="status-pill" id="baroPill" title="Barometer availability"><span class="led" id="baroLed"></span>BAROMETER</div>
+    <div class="status-pill" id="baroPill" title="Barometer availability"><span class="led" id="baroLed"></span>BARO</div>
     <div class="status-pill" id="livePill" title="Live tracking status"><span class="led" id="liveLed"></span>LIVE</div>
+    <div class="status-pill" id="syncPill" title="Group sync status"><span class="led" id="syncLed"></span>SYNC</div>
   </div>
 </header>
 
@@ -33,12 +41,63 @@
 
 <main class="layout">
 
+  <section class="panel session-panel">
+    <div class="panel-head">
+      <span class="eyebrow">00 · LIVE SESSION</span>
+      <h2>Sync the whole group</h2>
+      <p>Optional. Connect everyone's phone in real time so a drop anywhere alerts everyone — not just one screen.</p>
+    </div>
+
+    <p class="sync-msg" id="syncNotConfigured">
+      Live sync isn't set up for this copy of the site yet — everything below still works great in local mode. Open <strong>README.md → Section 6</strong> for a free, ~10-minute, copy-paste setup that turns this on.
+    </p>
+
+    <div id="syncSetupOk" hidden>
+      <div class="field">
+        <label for="sessionNameInput">Your name</label>
+        <input id="sessionNameInput" type="text" maxlength="24" placeholder="e.g. Aarav">
+      </div>
+
+      <div id="sessionJoinBox">
+        <div class="field-row">
+          <button type="button" class="btn btn-primary" id="createSessionBtn">+ Create new session</button>
+        </div>
+        <div class="field-row">
+          <input id="sessionCodeInput" type="text" maxlength="5" placeholder="or enter a code, e.g. Q7F2K">
+          <button type="button" class="btn btn-ghost" id="joinSessionBtn">Join</button>
+        </div>
+      </div>
+
+      <p class="session-status" id="sessionStatus"></p>
+
+      <div id="sessionConnectedBox" hidden>
+        <div class="session-code-display">
+          <span>SESSION CODE</span>
+          <strong id="sessionCodeDisplay">—</strong>
+          <button type="button" class="mini-btn" id="copyLinkBtn">Copy invite link</button>
+        </div>
+
+        <div class="field-row" style="margin-top:12px;">
+          <input id="refPointName" type="text" placeholder="Reference point, e.g. Base Camp">
+        </div>
+        <div class="field-row">
+          <input id="refPointHeight" type="number" step="0.01" placeholder="Height (m)">
+          <button type="button" class="btn btn-ghost small" id="addRefPointBtn">+ Add reference</button>
+        </div>
+
+        <button type="button" class="btn btn-ghost small danger" id="leaveSessionBtn">Leave session</button>
+      </div>
+    </div>
+  </section>
+
   <section class="panel roster-panel">
     <div class="panel-head">
       <span class="eyebrow">01 · ROSTER</span>
       <h2>Group</h2>
       <p>Add each person's reading, then compare them against the group.</p>
     </div>
+
+    <p class="roster-mode-note" id="rosterModeNote" hidden></p>
 
     <form id="addForm" class="add-form" autocomplete="off">
       <div class="field">
@@ -90,7 +149,7 @@
       <span><i class="dot within"></i>Within limit</span>
       <span><i class="dot above"></i>Above limit</span>
       <span><i class="dot below"></i>Below limit / drop</span>
-      <span><i class="dot live"></i>Live-tracked</span>
+      <span><i class="dot live"></i>Live now</span>
     </div>
   </section>
 
@@ -134,9 +193,15 @@
 </main>
 
 <footer class="app-footer">
-  <p>Altiguard runs entirely in this browser tab — nothing is sent to a server. All data stays on this device.</p>
+  <p>Altiguard runs entirely in this browser tab. Without a live session, nothing is sent to a server. With a live session (Section 6), only the group data you choose to sync passes through your own Firebase project.</p>
 </footer>
 
+<!-- Firebase compat SDK — only used if firebase-config.js turns it on. Loading these scripts costs a
+     small network request but does nothing unless a project config is present. -->
+<script src="https://www.gstatic.com/firebasejs/12.17.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/12.17.1/firebase-database-compat.js"></script>
+<script src="firebase-config.js"></script>
+<script src="sync.js"></script>
 <script src="script.js"></script>
 </body>
 </html>
