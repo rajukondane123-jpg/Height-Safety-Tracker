@@ -20,7 +20,7 @@
     dropThreshold: 1.5, 
     dropWindow: 4,
     ntfyTopic: "",
-    floorHeight: 3.5 // NEW: Default floor height in meters
+    floorHeight: 3.5 
   });
 
   const socket = io();
@@ -30,15 +30,18 @@
   let alerts = [];
   let globalReference = 0;
   
-  // NEW: Site Status variables
   let isAlerting = false;
   let alertClearTimeout = null;
 
-  // --- MAP VARIABLES ---
+  // --- MAP & WEATHER VARIABLES ---
   let map = null;
   let markers = {};
   let hospitalLayer = null;
   let hospitalTimeout = null;
+  
+  let weatherControl = null;
+  let lastWeatherFetch = 0;
+  let lastWeatherCoords = null;
 
   socket.on('syncReference', (refValue) => {
     globalReference = refValue;
@@ -77,7 +80,6 @@
     beep();
     if (entry.personId) flashFigure(entry.personId);
     
-    // Trigger Site Status Alarm
     triggerSiteAlarm();
     
     if (window.Notification && Notification.permission === "granted") {
@@ -89,10 +91,7 @@
     socket.emit('updateGroup', group);
   }
 
-  // --- DYNAMIC UI INJECTORS ---
-  // Safely injects the new HTML without you having to manually edit index.html
   function ensureNewUIElements() {
-    // 1. Inject Summary Bar at the top of the main container
     if (!document.getElementById("summaryBar")) {
       const main = document.querySelector("main") || document.querySelector(".dashboard") || document.body;
       const bar = document.createElement("div");
@@ -115,7 +114,6 @@
       main.insertBefore(bar, main.firstChild);
     }
 
-    // 2. Inject Floor Height input into the settings panel
     if (!document.getElementById("floorInput")) {
       const winInput = document.getElementById("windowInput");
       if (winInput) {
@@ -134,7 +132,6 @@
     isAlerting = true;
     clearTimeout(alertClearTimeout);
     renderSummary(); 
-    // Clear alarm automatically after 15 seconds
     alertClearTimeout = setTimeout(() => {
       isAlerting = false;
       renderSummary();
@@ -515,6 +512,7 @@
     renderGraph();
     renderLog();
     renderMap(); 
+    checkWeather(); // NEW: Triggers the weather check loop
   }
 
   // --- NEW: SITE SUMMARY BAR LOGIC ---
@@ -623,7 +621,6 @@
 
     const parts = [];
 
-    // --- NEW: DRAW HUMAN-READABLE FLOOR BANDS ---
     const floorH = settings.floorHeight || 3.5;
     const floorPx = floorH * scale;
     const startFloor = Math.floor(-maxAbs / floorH) - 1;
@@ -633,7 +630,6 @@
       const yBot = midY - (f * floorH) * scale;
       const yTop = yBot - floorPx;
 
-      // Ensure bands don't draw outside the graph borders
       const rectBot = Math.min(Math.max(yBot, marginT), marginT + plotH);
       const rectTop = Math.max(Math.min(yTop, marginT + plotH), marginT);
       const rectHeight = rectBot - rectTop;
@@ -642,14 +638,12 @@
         const bgClass = Math.abs(f) % 2 === 0 ? 'floor-even' : 'floor-odd';
         parts.push(`<rect x="${marginL}" y="${rectTop}" width="${plotW}" height="${rectHeight}" class="${bgClass}"></rect>`);
         
-        // Add "Level X" label inside the band
         if (rectHeight > 15) {
           const labelStr = f >= 0 ? `Level ${f}` : `Bsmt ${Math.abs(f)}`;
           parts.push(`<text class="floor-label" x="${marginL + plotW - 5}" y="${rectTop + 14}" text-anchor="end">${labelStr}</text>`);
         }
       }
     }
-    // -------------------------------------------
 
     for (let v = step; v <= maxAbs + 0.0001; v += step) {
       [v, -v].forEach((val) => {
@@ -701,6 +695,7 @@
     }).join("");
   }
 
+  // --- MAP ENHANCEMENTS & LIVE WEATHER LOGIC ---
   function initMap() {
     const mapEl = document.getElementById("map");
     if (!mapEl || typeof L === "undefined") return;
@@ -719,10 +714,64 @@
 
     hospitalLayer = L.layerGroup().addTo(map);
 
+    // NEW: Inject Weather HUD natively into the Leaflet Map layout
+    weatherControl = L.control({position: 'topright'});
+    weatherControl.onAdd = function () {
+        const div = L.DomUtil.create('div', 'weather-hud');
+        div.id = 'weatherHud';
+        div.innerHTML = `
+          <div class="weather-title">SITE WEATHER</div>
+          <div class="weather-data">
+            <span id="wTemp">--&deg;C</span> | <span id="wWind">-- km/h</span> 🌬️
+          </div>
+        `;
+        return div;
+    };
+    weatherControl.addTo(map);
+
     map.on('moveend', () => {
       clearTimeout(hospitalTimeout);
       hospitalTimeout = setTimeout(fetchHospitals, 1500); 
     });
+  }
+
+  // NEW: Fetch Weather API
+  function checkWeather() {
+    if (group.length === 0) return;
+    
+    // Find the first person with valid GPS coordinates to use as the "Site Location"
+    const person = group.find(p => p.lat !== null && p.lon !== null);
+    if (!person) return;
+
+    const now = Date.now();
+    // Only fetch every 15 minutes to avoid spamming the free API
+    if (now - lastWeatherFetch < 900000 && lastWeatherCoords) return;
+
+    lastWeatherFetch = now;
+    lastWeatherCoords = { lat: person.lat, lon: person.lon };
+
+    fetch(`https://api.open-meteo.com/v1/forecast?latitude=${person.lat}&longitude=${person.lon}&current_weather=true`)
+      .then(res => res.json())
+      .then(data => {
+         if (data && data.current_weather) {
+           const temp = data.current_weather.temperature;
+           const wind = data.current_weather.windspeed;
+           
+           const wTemp = document.getElementById("wTemp");
+           const wWind = document.getElementById("wWind");
+           const hud = document.getElementById("weatherHud");
+
+           if (wTemp) wTemp.innerHTML = `${temp}&deg;C`;
+           if (wWind) wWind.innerHTML = `${wind} km/h`;
+           
+           if (hud) {
+              if (wind > 50) hud.className = "weather-hud weather-danger";
+              else if (wind > 30) hud.className = "weather-hud weather-warn";
+              else hud.className = "weather-hud";
+           }
+         }
+      })
+      .catch(err => console.error("Weather Fetch Error:", err));
   }
 
   function fetchHospitals() {
@@ -812,13 +861,13 @@
   }
 
   function init() {
-    ensureNewUIElements(); // Builds the new UI chunks safely!
+    ensureNewUIElements(); 
 
     const limitIn = document.getElementById("limitInput");
     const dropIn = document.getElementById("dropInput");
     const winIn = document.getElementById("windowInput");
     const topicIn = document.getElementById("ntfyTopicInput");
-    const floorIn = document.getElementById("floorInput"); // New setting
+    const floorIn = document.getElementById("floorInput"); 
 
     if (limitIn) limitIn.value = settings.limit;
     if (dropIn) dropIn.value = settings.dropThreshold;
@@ -947,8 +996,8 @@
       if (input) input.addEventListener("input", saveSettings);
     });
 
-    initMap();       // Initialize Leaflet Map
-    initBarometer(); // Initialize Barometer
+    initMap();       
+    initBarometer(); 
     render();
   }
 
