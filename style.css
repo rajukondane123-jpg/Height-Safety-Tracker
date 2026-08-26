@@ -488,7 +488,6 @@ button { font-family: inherit; }
 }
 
 @keyframes figureSlide {
-  /* Starts 15px lower and smoothly glides straight up */
   from { opacity: 0; transform: translate(var(--fx), calc(var(--fy) + 15px)); }
   to { opacity: 1; transform: translate(var(--fx), var(--fy)); }
 }
