@@ -2,11 +2,6 @@ const express = require('express');
 const app = express();
 const http = require('http').createServer(app);
 const io = require('socket.io')(http);
-const twilio = require('twilio');
-
-const twilioClient = process.env.TWILIO_ACCOUNT_SID 
-  ? twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN) 
-  : null;
 
 app.use(express.static(__dirname));
 
@@ -43,18 +38,26 @@ io.on('connection', (socket) => {
   });
 
   socket.on('triggerAlert', (alertData) => {
+    // 1. Broadcast alert to all clients in the room
     if (currentRoom) socket.to(currentRoom).emit('receiveAlert', alertData);
 
-    const targetManagerPhone = alertData.managerPhone || process.env.MANAGER_PHONE;
-
-    if (twilioClient && targetManagerPhone && !alertData.test) {
+    // 2. Anonymous Ntfy.sh Push Notification
+    const topic = alertData.ntfyTopic; // The secret topic entered in the UI
+    
+    if (topic && !alertData.test) {
       const workerInfo = alertData.phone ? `${alertData.name} (${alertData.phone})` : alertData.name;
+      const message = `Worker ${workerInfo} just dropped ${alertData.drop}m. Please check their status immediately.`;
       
-      twilioClient.messages.create({
-        body: `⚠️ URGENT [Altiguard]: Sudden drop detected! Worker ${workerInfo} dropped ${alertData.drop}m.`,
-        from: process.env.TWILIO_PHONE,
-        to: targetManagerPhone
-      }).catch(err => console.error("Twilio SMS Error:", err));
+      // Native Node fetch request to ntfy.sh (No API keys or accounts needed!)
+      fetch(`https://ntfy.sh/${topic}`, {
+        method: 'POST',
+        body: message,
+        headers: {
+            'Title': '⚠️ URGENT: Altiguard Drop Detected!',
+            'Priority': 'urgent',
+            'Tags': 'rotating_light,warning,sos'
+        }
+      }).catch(err => console.error("Ntfy Error:", err));
     }
   });
 });
