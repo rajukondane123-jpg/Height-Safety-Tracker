@@ -483,14 +483,14 @@ button { font-family: inherit; }
 .graph-empty { fill: var(--text-faint); font-family: var(--font-mono); font-size: 12px; }
 
 .figure {
-  transform-box: fill-box;
-  transform-origin: center;
-  animation: figurePop 0.35s ease;
+  transform: translate(var(--fx), var(--fy));
+  animation: figureSlide 0.4s ease-out;
 }
 
-@keyframes figurePop {
-  from { opacity: 0; transform: scale(0.85); }
-  to { opacity: 1; transform: scale(1); }
+@keyframes figureSlide {
+  /* Starts 15px lower and smoothly glides straight up */
+  from { opacity: 0; transform: translate(var(--fx), calc(var(--fy) + 15px)); }
+  to { opacity: 1; transform: translate(var(--fx), var(--fy)); }
 }
 
 .figure-head { fill: currentColor; }
