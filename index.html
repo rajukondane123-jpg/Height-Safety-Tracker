@@ -32,8 +32,9 @@
 <div class="alert-banner" id="alertBanner" role="alert" aria-live="assertive"></div>
 
 <main class="layout">
-
-      <div class="panel-head">
+  
+        <section class="panel roster-panel">
+    <div class="panel-head">
       <span class="eyebrow">01 · ROSTER & GROUP CODE</span>
       <h2>Join a Private Group</h2>
       <div class="field-row" style="margin-bottom: 15px;">
@@ -98,15 +99,31 @@
       <span><i class="dot live"></i>Live-tracked</span>
     </div>
   </section>
-
-  <section class="panel settings-panel">
+            <section class="panel map-panel">
     <div class="panel-head">
-      <span class="eyebrow">03 · THRESHOLDS</span>
-      <h2>Limits</h2>
-      <p>Tune what counts as out-of-range or a sudden drop.</p>
+      <span class="eyebrow">03 · MAP</span>
+      <h2>Live Locations</h2>
+      <p>GPS positions of group members.</p>
+    </div>
+    <div class="map-wrap" id="map"></div>
+            </section>
+  
+    <section class="panel settings-panel">
+    <div class="panel-head">
+      <span class="eyebrow">04 · THRESHOLDS & ZERO LEVEL</span>
+      <h2>Limits & Ground Zero</h2>
+      <p>Set the fixed reference point (0 m) and tune drop limits.</p>
+    </div>
+    
+    <div class="setting">
+      <label for="referenceInput">Fixed Ground Level (m)</label>
+      <div class="field-row">
+        <input id="referenceInput" type="number" step="0.01" value="0">
+        <button type="button" id="setRefBtn" class="btn btn-primary">Set Zero</button>
+      </div>
     </div>
     <div class="setting">
-      <label for="limitInput">Height limit from group mean (± m)</label>
+      <label for="limitInput">Height limit from Zero (± m)</label>
       <input id="limitInput" type="number" min="0.1" step="0.1" value="2">
     </div>
     <div class="setting">
@@ -120,7 +137,8 @@
     <div class="setting-row">
       <button class="btn btn-ghost" id="testAlertBtn">🔔 Test alert</button>
     </div>
-  </section>
+    </section>
+  
 
   <section class="panel log-panel">
     <div class="panel-head">
@@ -141,6 +159,8 @@
 <footer class="app-footer">
   <p>Altiguard runs entirely in this browser tab — nothing is sent to a server. All data stays on this device.</p>
 </footer>
+  <script async defer src="https://maps.googleapis.com/maps/api/js?key=YOUR_API_KEY_HERE&callback=initMap"></script>
+  
 <script src="/socket.io/socket.io.js"></script>
 <script src="script.js"></script>
 </body>
