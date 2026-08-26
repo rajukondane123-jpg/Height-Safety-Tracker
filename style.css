@@ -160,17 +160,7 @@ button { font-family: inherit; }
   max-height: 100px;
   opacity: 1;
   margin: 10px auto 0;
-}
-
-.alert-banner.show::before {
-  content: "";
-}
-
-.alert-banner.show {
   display: block;
-}
-
-.alert-banner.show {
   background: var(--red-dim);
   border: 1px solid rgba(255, 77, 94, 0.45);
   color: #ffd7db;
@@ -232,6 +222,63 @@ button { font-family: inherit; }
   color: var(--text-dim);
 }
 
+/* ---------- session panel ---------- */
+
+.sync-msg {
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--text-dim);
+  background: var(--panel-alt);
+  border: 1px solid var(--panel-border);
+  border-radius: var(--radius-sm);
+  padding: 12px 14px;
+  margin: 0;
+}
+
+.sync-msg strong { color: var(--amber); }
+
+.session-status {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  margin: 8px 0 0;
+  min-height: 16px;
+}
+
+.session-status.ok { color: var(--teal); }
+.session-status.err { color: var(--red); }
+.session-status.pending { color: var(--text-dim); }
+
+.session-code-display {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  background: var(--panel-alt);
+  border: 1px solid var(--panel-border);
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+}
+
+.session-code-display span {
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  color: var(--text-faint);
+}
+
+.session-code-display strong {
+  font-family: var(--font-mono);
+  font-size: 18px;
+  letter-spacing: 0.15em;
+  color: var(--amber);
+}
+
+.roster-mode-note {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--teal);
+  margin: -4px 0 12px;
+}
+
 /* ---------- form ---------- */
 
 .field { display: flex; flex-direction: column; gap: 5px; margin-bottom: 12px; }
@@ -246,7 +293,8 @@ button { font-family: inherit; }
 .field label .opt { text-transform: none; color: var(--text-faint); letter-spacing: 0; }
 
 .field input,
-.setting input {
+.setting input,
+.field-row input {
   background: var(--panel-alt);
   border: 1px solid var(--panel-border);
   border-radius: var(--radius-sm);
@@ -258,13 +306,19 @@ button { font-family: inherit; }
 }
 
 .field input:focus,
-.setting input:focus {
+.setting input:focus,
+.field-row input:focus {
   outline: 2px solid var(--teal);
   outline-offset: 1px;
   border-color: transparent;
 }
 
-.field-row { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
+.field input:disabled {
+  opacity: 0.5;
+}
+
+.field-row { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; align-items: center; }
+.field-row input { flex: 1; min-width: 140px; }
 .field-row-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 
 .manual-fields {
@@ -361,12 +415,28 @@ button { font-family: inherit; }
 
 .roster-item:last-child { border-bottom: none; }
 
-.roster-item.is-live { background: linear-gradient(90deg, var(--red-dim), transparent 40%); margin: 0 -18px; padding-left: 18px; padding-right: 18px; }
+.roster-item.is-live { background: linear-gradient(90deg, var(--teal-dim), transparent 40%); margin: 0 -18px; padding-left: 18px; padding-right: 18px; }
+.roster-item.is-self { background: linear-gradient(90deg, var(--amber-dim), transparent 40%); margin: 0 -18px; padding-left: 18px; padding-right: 18px; }
 
 .roster-info { display: flex; flex-direction: column; gap: 2px; min-width: 140px; }
 .roster-info strong { font-family: var(--font-display); font-size: 14px; }
 .roster-sub { font-family: var(--font-mono); font-size: 11.5px; color: var(--text-dim); }
 .roster-coords { font-family: var(--font-mono); font-size: 10.5px; color: var(--text-faint); }
+.roster-distance { font-family: var(--font-mono); font-size: 10.5px; color: var(--text-faint); }
+
+.online-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  display: inline-block;
+  margin-right: 5px;
+  background: var(--text-faint);
+}
+
+.online-dot.on {
+  background: var(--teal);
+  box-shadow: 0 0 5px var(--teal);
+}
 
 .roster-status {
   font-family: var(--font-mono);
@@ -388,6 +458,7 @@ button { font-family: inherit; }
 .status-within { color: var(--teal); }
 .status-above { color: var(--amber); }
 .status-below { color: var(--red); }
+.status-waiting { color: var(--text-faint); }
 
 .roster-actions { display: flex; gap: 6px; }
 
@@ -424,15 +495,17 @@ button { font-family: inherit; }
 
 .figure-head { fill: currentColor; }
 .figure-body, .figure-arm, .figure-leg { fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; }
+.figure-flag { fill: currentColor; }
 .figure-readout { fill: currentColor; font-family: var(--font-mono); font-size: 10.5px; font-weight: 700; }
 .figure-label { fill: var(--text-dim); font-family: var(--font-mono); font-size: 9.5px; letter-spacing: 0.04em; }
+.figure-you-tag { fill: var(--amber); font-family: var(--font-mono); font-size: 8.5px; letter-spacing: 0.06em; }
 
 .figure-within { color: var(--teal); }
 .figure-above { color: var(--amber); }
 .figure-below { color: var(--red); }
 
 .live-halo { fill: none; stroke: var(--teal); stroke-width: 1.4; opacity: 0.55; animation: haloPulse 1.8s ease-in-out infinite; }
-.figure-below .live-halo, .figure-live.figure-below .live-halo { stroke: var(--red); }
+.figure-below .live-halo { stroke: var(--red); }
 
 @keyframes haloPulse {
   0% { r: 14; opacity: 0.6; }
@@ -441,7 +514,7 @@ button { font-family: inherit; }
 }
 
 .figure-flash { animation: flashPulse 0.5s ease-in-out infinite; }
-.figure-flash .figure-head, .figure-flash .figure-body, .figure-flash .figure-arm, .figure-flash .figure-leg { color: var(--red); }
+.figure-flash .figure-head, .figure-flash .figure-body, .figure-flash .figure-arm, .figure-flash .figure-leg, .figure-flash .figure-flag { color: var(--red); }
 
 @keyframes flashPulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
 
@@ -487,6 +560,7 @@ button { font-family: inherit; }
 .log-time { font-family: var(--font-mono); font-size: 11px; color: var(--text-faint); white-space: nowrap; }
 .log-text strong { color: var(--red); }
 .log-item.is-test .log-text strong { color: var(--text-dim); }
+.log-tag { font-size: 10px; color: var(--text-faint); }
 
 .log-actions { display: flex; gap: 8px; margin-top: 12px; flex-wrap: wrap; }
 
@@ -518,11 +592,13 @@ button { font-family: inherit; }
   .layout {
     grid-template-columns: 380px 1fr;
     grid-template-areas:
+      "session graph"
       "roster graph"
       "settings graph"
       "log log";
     align-items: start;
   }
+  .session-panel { grid-area: session; }
   .roster-panel { grid-area: roster; }
   .graph-panel { grid-area: graph; }
   .settings-panel { grid-area: settings; }
