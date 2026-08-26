@@ -29,6 +29,10 @@
   let alerts = [];
   let globalReference = 0;
 
+  // --- MAP VARIABLES ---
+  let map = null;
+  let markers = {};
+
   socket.on('syncReference', (refValue) => {
     globalReference = refValue;
     const refInput = document.getElementById("referenceInput");
@@ -440,11 +444,56 @@
     setTimeout(() => el.classList.remove("figure-flash"), 4000);
   }
 
+  // --- RESTORED MAP FUNCTIONS ---
+  function initMap() {
+    const mapEl = document.getElementById("map");
+    if (!mapEl || typeof L === "undefined") return;
+    
+    // Centers by default over India coordinates
+    map = L.map('map').setView([20.5937, 78.9629], 5);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '&copy; OpenStreetMap contributors'
+    }).addTo(map);
+  }
+
+  function renderMap() {
+    if (!map) return;
+    
+    const currentIds = group.map(p => p.id);
+    for (let id in markers) {
+      if (!currentIds.includes(id)) {
+        map.removeLayer(markers[id]);
+        delete markers[id];
+      }
+    }
+
+    let bounds = [];
+    group.forEach(p => {
+      if (p.lat !== null && p.lon !== null && p.lat !== undefined && p.lon !== undefined) {
+        const latlng = [p.lat, p.lon];
+        bounds.push(latlng);
+        
+        if (markers[p.id]) {
+          markers[p.id].setLatLng(latlng);
+          markers[p.id].getPopup().setContent(`<b>${escapeHtml(p.name)}</b><br>${p.height.toFixed(2)}m`);
+        } else {
+          const marker = L.marker(latlng).addTo(map);
+          marker.bindPopup(`<b>${escapeHtml(p.name)}</b><br>${p.height.toFixed(2)}m`);
+          markers[p.id] = marker;
+        }
+      }
+    });
+
+    if (bounds.length > 0) {
+      map.fitBounds(bounds, { padding: [30, 30], maxZoom: 16 });
+    }
+  }
+
   function render() {
     renderRoster();
     renderGraph();
     renderLog();
-    if (typeof renderMap === "function") renderMap();
+    renderMap(); // Triggers the map update
   }
 
   function renderRoster() {
@@ -702,6 +751,7 @@
       if (input) input.addEventListener("input", saveSettings);
     });
 
+    initMap();       // <--- Triggers the map to load on startup
     initBarometer();
     render();
   }
