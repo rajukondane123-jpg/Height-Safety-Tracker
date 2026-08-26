@@ -19,7 +19,8 @@
     limit: 2, 
     dropThreshold: 1.5, 
     dropWindow: 4,
-    ntfyTopic: ""
+    ntfyTopic: "",
+    floorHeight: 3.5 // NEW: Default floor height in meters
   });
 
   const socket = io();
@@ -28,6 +29,10 @@
   let group = [];
   let alerts = [];
   let globalReference = 0;
+  
+  // NEW: Site Status variables
+  let isAlerting = false;
+  let alertClearTimeout = null;
 
   // --- MAP VARIABLES ---
   let map = null;
@@ -72,6 +77,9 @@
     beep();
     if (entry.personId) flashFigure(entry.personId);
     
+    // Trigger Site Status Alarm
+    triggerSiteAlarm();
+    
     if (window.Notification && Notification.permission === "granted") {
       new Notification(`⚠️ Drop Alert: ${entry.name}`, { body: `${entry.name} dropped ${entry.drop}m` });
     }
@@ -79,6 +87,58 @@
 
   function syncToServer() {
     socket.emit('updateGroup', group);
+  }
+
+  // --- DYNAMIC UI INJECTORS ---
+  // Safely injects the new HTML without you having to manually edit index.html
+  function ensureNewUIElements() {
+    // 1. Inject Summary Bar at the top of the main container
+    if (!document.getElementById("summaryBar")) {
+      const main = document.querySelector("main") || document.querySelector(".dashboard") || document.body;
+      const bar = document.createElement("div");
+      bar.id = "summaryBar";
+      bar.className = "summary-bar";
+      bar.innerHTML = `
+        <div class="stat-box">
+          <span class="stat-label">Active Personnel</span>
+          <strong id="statActive">0 Tracked</strong>
+        </div>
+        <div class="stat-box">
+          <span class="stat-label">Highest Elevation</span>
+          <strong id="statHighest">--</strong>
+        </div>
+        <div class="stat-box">
+          <span class="stat-label">System Status</span>
+          <strong id="statStatus" class="status-secure">🟢 SECURE</strong>
+        </div>
+      `;
+      main.insertBefore(bar, main.firstChild);
+    }
+
+    // 2. Inject Floor Height input into the settings panel
+    if (!document.getElementById("floorInput")) {
+      const winInput = document.getElementById("windowInput");
+      if (winInput) {
+        const wrapper = document.createElement("div");
+        wrapper.style.marginTop = "15px";
+        wrapper.innerHTML = `
+          <label style="display:block; font-size:12px; font-weight:600; color:var(--text-dim); margin-bottom:5px;">Standard Floor Height (m)</label>
+          <input type="number" id="floorInput" step="0.1" class="panel-input" value="${settings.floorHeight}">
+        `;
+        winInput.parentNode.insertBefore(wrapper, winInput.nextSibling);
+      }
+    }
+  }
+
+  function triggerSiteAlarm() {
+    isAlerting = true;
+    clearTimeout(alertClearTimeout);
+    renderSummary(); 
+    // Clear alarm automatically after 15 seconds
+    alertClearTimeout = setTimeout(() => {
+      isAlerting = false;
+      renderSummary();
+    }, 15000);
   }
    
   let manualMode = false;
@@ -424,6 +484,9 @@
     if (alerts.length > 50) alerts.length = 50;
     socket.emit('triggerAlert', entry);
     renderLog();
+    
+    triggerSiteAlarm();
+    
     showAlertBanner(`${isTest ? "[TEST] " : ""}⚠️ Sudden height drop — ${entry.name} dropped ${entry.drop} m`);
     vibrate();
     beep();
@@ -447,10 +510,43 @@
   }
 
   function render() {
+    renderSummary(); 
     renderRoster();
     renderGraph();
     renderLog();
     renderMap(); 
+  }
+
+  // --- NEW: SITE SUMMARY BAR LOGIC ---
+  function renderSummary() {
+    const elActive = document.getElementById("statActive");
+    const elHighest = document.getElementById("statHighest");
+    const elStatus = document.getElementById("statStatus");
+    if (!elActive) return;
+
+    elActive.textContent = `${group.length} Personnel`;
+
+    if (group.length > 0) {
+      const highest = group.reduce((prev, curr) => (prev.height > curr.height) ? prev : curr);
+      const relHeight = highest.height - getGroupReference();
+      const floorH = settings.floorHeight || 3.5;
+      const floorNum = Math.floor(relHeight / floorH);
+      const floorLabel = floorNum >= 0 ? `Lvl ${floorNum}` : `Bsmnt ${Math.abs(floorNum)}`;
+      
+      elHighest.innerHTML = `${escapeHtml(highest.name)} <span style="color:var(--amber)">@ +${relHeight.toFixed(1)}m</span> (${floorLabel})`;
+    } else {
+      elHighest.textContent = "--";
+    }
+
+    if (isAlerting) {
+      elStatus.className = "status-danger";
+      elStatus.innerHTML = "🔴 FALL DETECTED";
+      elStatus.style.animation = "pulseBorder 1s infinite alternate";
+    } else {
+      elStatus.className = "status-secure";
+      elStatus.innerHTML = "🟢 SECURE";
+      elStatus.style.animation = "none";
+    }
   }
 
   function renderRoster() {
@@ -527,6 +623,34 @@
 
     const parts = [];
 
+    // --- NEW: DRAW HUMAN-READABLE FLOOR BANDS ---
+    const floorH = settings.floorHeight || 3.5;
+    const floorPx = floorH * scale;
+    const startFloor = Math.floor(-maxAbs / floorH) - 1;
+    const endFloor = Math.ceil(maxAbs / floorH) + 1;
+
+    for (let f = startFloor; f <= endFloor; f++) {
+      const yBot = midY - (f * floorH) * scale;
+      const yTop = yBot - floorPx;
+
+      // Ensure bands don't draw outside the graph borders
+      const rectBot = Math.min(Math.max(yBot, marginT), marginT + plotH);
+      const rectTop = Math.max(Math.min(yTop, marginT + plotH), marginT);
+      const rectHeight = rectBot - rectTop;
+
+      if (rectHeight > 0) {
+        const bgClass = Math.abs(f) % 2 === 0 ? 'floor-even' : 'floor-odd';
+        parts.push(`<rect x="${marginL}" y="${rectTop}" width="${plotW}" height="${rectHeight}" class="${bgClass}"></rect>`);
+        
+        // Add "Level X" label inside the band
+        if (rectHeight > 15) {
+          const labelStr = f >= 0 ? `Level ${f}` : `Bsmt ${Math.abs(f)}`;
+          parts.push(`<text class="floor-label" x="${marginL + plotW - 5}" y="${rectTop + 14}" text-anchor="end">${labelStr}</text>`);
+        }
+      }
+    }
+    // -------------------------------------------
+
     for (let v = step; v <= maxAbs + 0.0001; v += step) {
       [v, -v].forEach((val) => {
         const y = midY - val * scale;
@@ -577,12 +701,10 @@
     }).join("");
   }
 
-  // --- MAP ENHANCEMENTS (TopoMap + Surveyor Crosshairs + Nearby Hospitals + Zoom Controls) ---
   function initMap() {
     const mapEl = document.getElementById("map");
     if (!mapEl || typeof L === "undefined") return;
     
-    // GUARANTEED ZOOM: Explicitly turning on zoom buttons (+/-), mouse scroll, and drag features.
     map = L.map('map', {
       zoomControl: true,
       scrollWheelZoom: true,
@@ -612,7 +734,6 @@
     const N = bounds.getNorth();
     const E = bounds.getEast();
     
-    // RESTORED TO ONLY SEARCH FOR HOSPITALS
     const query = `[out:json][timeout:10];node["amenity"="hospital"](${S},${W},${N},${E});out;`;
     const url = `https://overpass-api.de/api/interpreter?data=${encodeURIComponent(query)}`;
 
@@ -626,7 +747,6 @@
             if (item.lat && item.lon) {
               const name = (item.tags && item.tags.name) ? item.tags.name : "Emergency Hospital";
               
-              // BIG 40x40px Glowing Red Hospital Icon
               const icon = L.divIcon({
                 className: '', 
                 html: `<div style="background: #0a0f1c; border: 3px solid #ff4d5e; border-radius: 50%; width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; font-size: 24px; box-shadow: 0 0 15px #ff4d5e80;">🏥</div>`,
@@ -692,15 +812,19 @@
   }
 
   function init() {
+    ensureNewUIElements(); // Builds the new UI chunks safely!
+
     const limitIn = document.getElementById("limitInput");
     const dropIn = document.getElementById("dropInput");
     const winIn = document.getElementById("windowInput");
     const topicIn = document.getElementById("ntfyTopicInput");
+    const floorIn = document.getElementById("floorInput"); // New setting
 
     if (limitIn) limitIn.value = settings.limit;
     if (dropIn) dropIn.value = settings.dropThreshold;
     if (winIn) winIn.value = settings.dropWindow;
     if (topicIn) topicIn.value = settings.ntfyTopic || "";
+    if (floorIn) floorIn.value = settings.floorHeight || 3.5;
 
     const addForm = document.getElementById("addForm");
     if (addForm) {
@@ -814,11 +938,12 @@
       if (dropIn) settings.dropThreshold = parseFloat(dropIn.value) || 1.5;
       if (winIn) settings.dropWindow = parseInt(winIn.value, 10) || 4;
       if (topicIn) settings.ntfyTopic = topicIn.value.trim();
+      if (floorIn) settings.floorHeight = parseFloat(floorIn.value) || 3.5;
       saveJSON(STORAGE.settings, settings);
       render();
     };
 
-    [limitIn, dropIn, winIn, topicIn].forEach(input => {
+    [limitIn, dropIn, winIn, topicIn, floorIn].forEach(input => {
       if (input) input.addEventListener("input", saveSettings);
     });
 
