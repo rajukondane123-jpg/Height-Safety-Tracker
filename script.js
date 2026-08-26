@@ -32,8 +32,8 @@
   // --- MAP VARIABLES ---
   let map = null;
   let markers = {};
-  let amenityLayer = null;
-  let amenityTimeout = null;
+  let hospitalLayer = null;
+  let hospitalTimeout = null;
 
   socket.on('syncReference', (refValue) => {
     globalReference = refValue;
@@ -577,28 +577,34 @@
     }).join("");
   }
 
-  // --- MAP ENHANCEMENTS (TopoMap + Surveyor Crosshairs + Nearby Amenities) ---
+  // --- MAP ENHANCEMENTS (TopoMap + Surveyor Crosshairs + Nearby Hospitals + Zoom Controls) ---
   function initMap() {
     const mapEl = document.getElementById("map");
     if (!mapEl || typeof L === "undefined") return;
     
-    map = L.map('map').setView([20.5937, 78.9629], 5);
+    // GUARANTEED ZOOM: Explicitly turning on zoom buttons (+/-), mouse scroll, and drag features.
+    map = L.map('map', {
+      zoomControl: true,
+      scrollWheelZoom: true,
+      doubleClickZoom: true,
+      dragging: true
+    }).setView([20.5937, 78.9629], 5);
     
     L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', {
       maxZoom: 17,
       attribution: '&copy; OpenTopoMap'
     }).addTo(map);
 
-    amenityLayer = L.layerGroup().addTo(map);
+    hospitalLayer = L.layerGroup().addTo(map);
 
     map.on('moveend', () => {
-      clearTimeout(amenityTimeout);
-      amenityTimeout = setTimeout(fetchAmenities, 2000); 
+      clearTimeout(hospitalTimeout);
+      hospitalTimeout = setTimeout(fetchHospitals, 1500); 
     });
   }
 
-  function fetchAmenities() {
-    if (!map || map.getZoom() < 12) return; 
+  function fetchHospitals() {
+    if (!map || map.getZoom() < 11) return; 
 
     const bounds = map.getBounds();
     const S = bounds.getSouth();
@@ -606,50 +612,37 @@
     const N = bounds.getNorth();
     const E = bounds.getEast();
     
-    // Scans for Hospitals, Police Stations, and Pharmacies (Medical Stores)
-    const query = `[out:json][timeout:10];(node["amenity"="hospital"](${S},${W},${N},${E});node["amenity"="police"](${S},${W},${N},${E});node["amenity"="pharmacy"](${S},${W},${N},${E}););out;`;
+    // RESTORED TO ONLY SEARCH FOR HOSPITALS
+    const query = `[out:json][timeout:10];node["amenity"="hospital"](${S},${W},${N},${E});out;`;
     const url = `https://overpass-api.de/api/interpreter?data=${encodeURIComponent(query)}`;
 
     fetch(url)
       .then(res => res.json())
       .then(data => {
-        amenityLayer.clearLayers(); 
+        hospitalLayer.clearLayers(); 
         
         if (data && data.elements) {
           data.elements.forEach(item => {
-            if (item.lat && item.lon && item.tags && item.tags.amenity) {
-              const amenityType = item.tags.amenity;
-              const name = item.tags.name ? item.tags.name : (amenityType.charAt(0).toUpperCase() + amenityType.slice(1));
+            if (item.lat && item.lon) {
+              const name = (item.tags && item.tags.name) ? item.tags.name : "Emergency Hospital";
               
-              let emoji = "📍";
-              let color = "#ffffff";
-              let label = "Location";
-
-              // Dynamically color-code based on the facility type
-              if (amenityType === "hospital") {
-                 emoji = "🏥"; color = "#ff4d5e"; label = "Emergency Facility";
-              } else if (amenityType === "police") {
-                 emoji = "🚓"; color = "#3b82f6"; label = "Police Station";
-              } else if (amenityType === "pharmacy") {
-                 emoji = "💊"; color = "#10b981"; label = "Medical Store";
-              }
-
+              // BIG 40x40px Glowing Red Hospital Icon
               const icon = L.divIcon({
-                className: 'custom-amenity',
-                html: `<div style="background: #0a0f1c; border: 2px solid ${color}; border-radius: 50%; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; font-size: 13px; box-shadow: 0 0 10px ${color}80;">${emoji}</div>`,
-                iconSize: [28, 28],
-                iconAnchor: [14, 14],
-                popupAnchor: [0, -14]
+                className: '', 
+                html: `<div style="background: #0a0f1c; border: 3px solid #ff4d5e; border-radius: 50%; width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; font-size: 24px; box-shadow: 0 0 15px #ff4d5e80;">🏥</div>`,
+                iconSize: [40, 40],
+                iconAnchor: [20, 20],
+                popupAnchor: [0, -20]
               });
 
               const marker = L.marker([item.lat, item.lon], { icon: icon });
-              marker.bindPopup(`<b style="color: ${color}; font-family: var(--font-display);">${emoji} ${escapeHtml(name)}</b><br><span style="font-family: var(--font-mono); font-size: 11px; color: var(--text-dim);">${label}</span>`);
-              amenityLayer.addLayer(marker);
+              marker.bindPopup(`<b style="color: #ff4d5e; font-family: var(--font-display);">🏥 ${escapeHtml(name)}</b><br><span style="font-family: var(--font-mono); font-size: 12px; color: var(--text-dim);">Emergency Facility</span>`);
+              hospitalLayer.addLayer(marker);
             }
           });
         }
       })
-      .catch(err => console.error("Amenity Fetch Error:", err));
+      .catch(err => console.error("Hospital Fetch Error:", err));
   }
 
   function renderMap() {
@@ -664,16 +657,16 @@
     }
 
     const crosshairIcon = L.divIcon({
-      className: 'custom-crosshair',
-      html: `<svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="#f5a623" stroke-width="1.5">
+      className: '',
+      html: `<svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#f5a623" stroke-width="2" style="filter: drop-shadow(0 0 5px #f5a623);">
                <circle cx="12" cy="12" r="6"></circle>
-               <circle cx="12" cy="12" r="1" fill="#f5a623"></circle>
+               <circle cx="12" cy="12" r="2" fill="#f5a623"></circle>
                <line x1="12" y1="0" x2="12" y2="24"></line>
                <line x1="0" y1="12" x2="24" y2="12"></line>
              </svg>`,
-      iconSize: [30, 30],
-      iconAnchor: [15, 15],
-      popupAnchor: [0, -15]
+      iconSize: [36, 36],
+      iconAnchor: [18, 18],
+      popupAnchor: [0, -18]
     });
 
     let bounds = [];
