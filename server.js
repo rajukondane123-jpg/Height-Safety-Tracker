@@ -3,43 +3,45 @@ const app = express();
 const http = require('http').createServer(app);
 const io = require('socket.io')(http);
 
-// Serve your HTML, CSS, and JS files
 app.use(express.static(__dirname));
 
-// Store group data in server memory { 'GROUP1': [ {person1}, {person2} ] }
 const rooms = {};
+const roomReferences = {}; // Stores the fixed ground level (0m) for each room
 
 io.on('connection', (socket) => {
   let currentRoom = null;
 
-  // Join a private group code
   socket.on('joinRoom', (roomCode) => {
     if (currentRoom) socket.leave(currentRoom);
     currentRoom = roomCode;
     socket.join(roomCode);
     
-    // Create room if it doesn't exist, then send current data to the new user
     if (!rooms[roomCode]) rooms[roomCode] = [];
+    if (roomReferences[roomCode] === undefined) roomReferences[roomCode] = 0; // Default to 0
+    
     socket.emit('syncGroup', rooms[roomCode]);
+    socket.emit('syncReference', roomReferences[roomCode]); // Send zero level to new user
   });
 
-  // When a phone updates a location/height, tell all other phones
   socket.on('updateGroup', (newGroupData) => {
     if (currentRoom) {
       rooms[currentRoom] = newGroupData;
-      // Send to everyone else in the room
       socket.to(currentRoom).emit('syncGroup', rooms[currentRoom]);
     }
   });
 
-  // Share sudden drop alerts to all phones
-  socket.on('triggerAlert', (alertData) => {
+  // When Admin updates the fixed ground level
+  socket.on('updateReference', (newRef) => {
     if (currentRoom) {
-      socket.to(currentRoom).emit('receiveAlert', alertData);
+      roomReferences[currentRoom] = newRef;
+      io.to(currentRoom).emit('syncReference', newRef); // Update everyone instantly
     }
+  });
+
+  socket.on('triggerAlert', (alertData) => {
+    if (currentRoom) socket.to(currentRoom).emit('receiveAlert', alertData);
   });
 });
 
 const PORT = process.env.PORT || 3000;
 http.listen(PORT, () => console.log(`Server running on port ${PORT}`));
-
