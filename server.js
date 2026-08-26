@@ -1,4 +1,5 @@
 const express = require('express');
+const https = require('https'); // <-- Added native https module
 const app = express();
 const http = require('http').createServer(app);
 const io = require('socket.io')(http);
@@ -38,26 +39,37 @@ io.on('connection', (socket) => {
   });
 
   socket.on('triggerAlert', (alertData) => {
-    // 1. Broadcast alert to all clients in the room
     if (currentRoom) socket.to(currentRoom).emit('receiveAlert', alertData);
 
-    // 2. Anonymous Ntfy.sh Push Notification
-    const topic = alertData.ntfyTopic; // The secret topic entered in the UI
+    const topic = alertData.ntfyTopic; 
     
     if (topic) {
       const workerInfo = alertData.phone ? `${alertData.name} (${alertData.phone})` : alertData.name;
       const message = `Worker ${workerInfo} just dropped ${alertData.drop}m. Please check their status immediately.`;
       
-      // Native Node fetch request to ntfy.sh (No API keys or accounts needed!)
-      fetch(`https://ntfy.sh/${topic}`, {
+      // Using bulletproof native HTTPS instead of fetch
+      const options = {
+        hostname: 'ntfy.sh',
+        port: 443,
+        path: `/${topic}`,
         method: 'POST',
-        body: message,
         headers: {
-            'Title': '⚠️ URGENT: Altiguard Drop Detected!',
-            'Priority': 'urgent',
-            'Tags': 'rotating_light,warning,sos'
+          'Title': '⚠️ URGENT: Altiguard Drop Detected!',
+          'Priority': 'urgent',
+          'Tags': 'rotating_light,warning,sos'
         }
-      }).catch(err => console.error("Ntfy Error:", err));
+      };
+
+      const req = https.request(options, (res) => {
+        console.log(`Ntfy sent with status: ${res.statusCode}`);
+      });
+
+      req.on('error', (e) => {
+        console.error(`Ntfy Error: ${e.message}`);
+      });
+
+      req.write(message);
+      req.end();
     }
   });
 });
