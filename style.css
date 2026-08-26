@@ -585,6 +585,15 @@ button { font-family: inherit; }
     animation: none !important;
   }
 }
+/* ---------- map ---------- */
+.map-wrap {
+  width: 100%;
+  height: 380px;
+  background: var(--panel-alt);
+  border: 1px solid var(--panel-border);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
 
 /* ---------- desktop layout ---------- */
 
@@ -594,8 +603,8 @@ button { font-family: inherit; }
     grid-template-areas:
       "session graph"
       "roster graph"
-      "settings graph"
-      "log log";
+      "settings map"
+      "log map";
     align-items: start;
   }
   .session-panel { grid-area: session; }
@@ -603,4 +612,5 @@ button { font-family: inherit; }
   .graph-panel { grid-area: graph; }
   .settings-panel { grid-area: settings; }
   .log-panel { grid-area: log; }
+  .map-panel { grid-area: map; }
 }
