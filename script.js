@@ -1,6 +1,6 @@
 /* ============================================================
    ALTIGUARD
-   Group elevation tracking + sudden-drop alerting + SMS
+   Group elevation tracking + sudden-drop alerting + ntfy push
    ============================================================ */
 
 (function () {
@@ -15,12 +15,12 @@
     try { const raw = localStorage.getItem(key); return raw ? JSON.parse(raw) : fallback; } catch (e) { return fallback; }
   }
 
+  // Load settings (Updated for ntfy topic)
   let settings = loadJSON(STORAGE.settings, { 
     limit: 2, 
     dropThreshold: 1.5, 
     dropWindow: 4,
-    managerPhone: "",
-    managerEmail: ""
+    ntfyTopic: ""
   });
 
   const socket = io();
@@ -62,6 +62,11 @@
     vibrate();
     beep();
     if (entry.personId) flashFigure(entry.personId);
+    
+    // Fallback Local Browser Push Notification
+    if (Notification && Notification.permission === "granted") {
+      new Notification(`⚠️ Drop Alert: ${entry.name}`, { body: `${entry.name} dropped ${entry.drop}m` });
+    }
   });
 
   function syncToServer() {
@@ -78,7 +83,6 @@
   let audioCtx = null;
   let bannerTimeout = null;
 
-  // Man Down Timer Variables
   let inactivityInterval = null;
   let lastMoveTime = null;
   let lastValidHeight = null;
@@ -244,13 +248,13 @@
 
         if (altitude === null || altitude === undefined) {
           pendingCapture = { lat: latitude, lon: longitude, height: null, accuracy, method: "gps-no-altitude" };
-          readout.innerHTML = `<span class="readout-warn">No altitude from GPS (common indoors). Got lat ${latitude.toFixed(5)}, lon ${longitude.toFixed(5)}. Switch to manual entry to set a height.</span>`;
+          readout.innerHTML = `<span class="readout-warn">No altitude from GPS (common indoors). Switch to manual entry to set a height.</span>`;
           updateAddButtonState();
           return;
         }
 
         pendingCapture = { lat: latitude, lon: longitude, height: altitude, accuracy, method: "gps" };
-        readout.innerHTML = `<span class="readout-ok">\u2713 ${altitude.toFixed(2)} m \u00b7 ${latitude.toFixed(5)}, ${longitude.toFixed(5)} \u00b7 \u00b1${accuracy ? accuracy.toFixed(0) : "?"} m</span>`;
+        readout.innerHTML = `<span class="readout-ok">\u2713 ${altitude.toFixed(2)} m \u00b7 ${latitude.toFixed(5)}, ${longitude.toFixed(5)}</span>`;
         updateAddButtonState();
       },
       (err) => {
@@ -396,8 +400,7 @@
       drop: Number(dropAmount.toFixed(2)),
       time: new Date().toISOString(),
       test: !!isTest,
-      managerPhone: settings.managerPhone || "",
-      managerEmail: settings.managerEmail || ""
+      ntfyTopic: settings.ntfyTopic || ""
     };
     alerts.unshift(entry);
     if (alerts.length > 50) alerts.length = 50;
@@ -557,9 +560,12 @@
     document.getElementById("dropInput").value = settings.dropThreshold;
     document.getElementById("windowInput").value = settings.dropWindow;
 
-    // Load manager settings
-    document.getElementById("managerPhoneInput").value = settings.managerPhone || "";
-    document.getElementById("managerEmailInput").value = settings.managerEmail || "";
+    // Load anonymous ntfy settings
+    document.getElementById("ntfyTopicInput").value = settings.ntfyTopic || "";
+
+    if (Notification && Notification.permission === "default") {
+        Notification.requestPermission();
+    }
 
     setGpsStatus(navigator.geolocation ? "off" : "danger", navigator.geolocation ? "Not yet used." : "Not supported in this browser.");
     setBaroStatus("off", "Checking\u2026");
@@ -645,12 +651,10 @@
       const v = parseFloat(e.target.value);
       if (!isNaN(v) && v > 0) { settings.dropWindow = v; saveJSON(STORAGE.settings, settings); }
     });
-    document.getElementById("managerPhoneInput").addEventListener("input", (e) => {
-      settings.managerPhone = e.target.value.trim();
-      saveJSON(STORAGE.settings, settings);
-    });
-    document.getElementById("managerEmailInput").addEventListener("input", (e) => {
-      settings.managerEmail = e.target.value.trim();
+    
+    // Save Ntfy Topic dynamically
+    document.getElementById("ntfyTopicInput").addEventListener("input", (e) => {
+      settings.ntfyTopic = e.target.value.trim();
       saveJSON(STORAGE.settings, settings);
     });
 
