@@ -4,7 +4,7 @@ const http = require('http').createServer(app);
 const io = require('socket.io')(http);
 
 app.use(express.static(__dirname));
-
+app.get('/ping', (req, res) => res.status(200).send('Server is awake!'));
 const rooms = {};
 const roomReferences = {};
 
