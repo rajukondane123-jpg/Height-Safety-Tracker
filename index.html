@@ -52,10 +52,10 @@
         <input id="nameInput" type="text" placeholder="e.g. Aarav" required maxlength="24">
       </div>
       
-      <!-- Worker Phone Number -->
+      <!-- Worker Phone Number (Optional) -->
       <div class="field">
-        <label for="workerPhoneInput">Worker Phone Number</label>
-        <input id="workerPhoneInput" type="tel" placeholder="e.g. +91 9876543210" required>
+        <label for="workerPhoneInput">Worker Phone / Tag <span class="opt">(optional)</span></label>
+        <input id="workerPhoneInput" type="text" placeholder="e.g. Electrician">
       </div>
 
       <div class="field-row">
@@ -118,19 +118,17 @@
   <section class="panel settings-panel">
     <div class="panel-head">
       <span class="eyebrow">04 · THRESHOLDS & CONTACTS</span>
-      <h2>Settings & Contacts</h2>
-      <p>Configure manager alerts, zero level, and drop limits.</p>
+      <h2>Settings & Alerts</h2>
+      <p>Configure zero level, limits, and push notifications.</p>
     </div>
 
-    <!-- Manager Emergency Contacts -->
+    <!-- Anonymous Push Notifications -->
     <div class="setting">
-      <label for="managerPhoneInput">Manager Phone Number (for SMS Alerts)</label>
-      <input id="managerPhoneInput" type="tel" placeholder="e.g. +1234567890">
-    </div>
-
-    <div class="setting">
-      <label for="managerEmailInput">Manager Email <span class="opt">(optional)</span></label>
-      <input id="managerEmailInput" type="email" placeholder="manager@example.com">
+      <label for="ntfyTopicInput">Secret Alert Channel (ntfy.sh topic)</label>
+      <input id="ntfyTopicInput" type="text" placeholder="e.g. altiguard-team-xyz-99">
+      <p style="font-size: 11px; color: var(--text-faint); margin-top: 5px;">
+        Pick a random secret phrase. Download the free <strong>ntfy</strong> app on your phone, tap +, and type that exact phrase to subscribe to alerts (no login required).
+      </p>
     </div>
     
     <div class="setting">
@@ -177,7 +175,6 @@
   <p>Altiguard runs entirely in this browser tab. Powered by Leaflet & Socket.io.</p>
 </footer>
 
-  <!-- Free Leaflet Map Script (No API Key Required) -->
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script src="/socket.io/socket.io.js"></script>
   <script src="script.js"></script>
