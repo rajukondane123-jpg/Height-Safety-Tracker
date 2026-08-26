@@ -4,13 +4,14 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>Altiguard — Group Elevation &amp; Fall-Alert Tracker</title>
-<meta name="description" content="Track each person's height relative to the group average, watch it on a live elevation graph, and get alerted on sudden drops.">
+<meta name="description" content="Track each person's height relative to the group reference, watch it on a live elevation graph, and get alerted on sudden drops.">
 <meta name="theme-color" content="#0A0F1C">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=JetBrains+Mono:wght@400;500;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<!-- Free Leaflet Map CSS -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 <link rel="stylesheet" href="style.css">
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" /> 
 </head>
 <body>
 <div class="topo-bg" aria-hidden="true"></div>
@@ -34,7 +35,7 @@
 
 <main class="layout">
   
-        <section class="panel roster-panel">
+  <section class="panel roster-panel">
     <div class="panel-head">
       <span class="eyebrow">01 · ROSTER & GROUP CODE</span>
       <h2>Join a Private Group</h2>
@@ -47,8 +48,14 @@
 
     <form id="addForm" class="add-form" autocomplete="off">
       <div class="field">
-        <label for="nameInput">Name</label>
+        <label for="nameInput">Worker Name</label>
         <input id="nameInput" type="text" placeholder="e.g. Aarav" required maxlength="24">
+      </div>
+      
+      <!-- Worker Phone Number -->
+      <div class="field">
+        <label for="workerPhoneInput">Worker Phone Number</label>
+        <input id="workerPhoneInput" type="tel" placeholder="e.g. +91 9876543210" required>
       </div>
 
       <div class="field-row">
@@ -86,7 +93,7 @@
     <div class="panel-head">
       <span class="eyebrow">02 · ELEVATION PROFILE</span>
       <h2>Height vs. group level</h2>
-      <p>The dashed line is the group's average height (0 m). Dotted lines mark your limit.</p>
+      <p>The dashed line is the fixed reference height (0 m). Dotted lines mark your limit.</p>
     </div>
     <div class="graph-wrap">
       <svg id="graphSvg" viewBox="0 0 640 380" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Elevation profile chart"></svg>
@@ -98,20 +105,32 @@
       <span><i class="dot live"></i>Live-tracked</span>
     </div>
   </section>
-            <section class="panel map-panel">
+
+  <section class="panel map-panel">
     <div class="panel-head">
       <span class="eyebrow">03 · MAP</span>
       <h2>Live Locations</h2>
       <p>GPS positions of group members.</p>
     </div>
     <div class="map-wrap" id="map"></div>
-            </section>
+  </section>
   
-    <section class="panel settings-panel">
+  <section class="panel settings-panel">
     <div class="panel-head">
-      <span class="eyebrow">04 · THRESHOLDS & ZERO LEVEL</span>
-      <h2>Limits & Ground Zero</h2>
-      <p>Set the fixed reference point (0 m) and tune drop limits.</p>
+      <span class="eyebrow">04 · THRESHOLDS & CONTACTS</span>
+      <h2>Settings & Contacts</h2>
+      <p>Configure manager alerts, zero level, and drop limits.</p>
+    </div>
+
+    <!-- Manager Emergency Contacts -->
+    <div class="setting">
+      <label for="managerPhoneInput">Manager Phone Number (for SMS Alerts)</label>
+      <input id="managerPhoneInput" type="tel" placeholder="e.g. +1234567890">
+    </div>
+
+    <div class="setting">
+      <label for="managerEmailInput">Manager Email <span class="opt">(optional)</span></label>
+      <input id="managerEmailInput" type="email" placeholder="manager@example.com">
     </div>
     
     <div class="setting">
@@ -136,12 +155,11 @@
     <div class="setting-row">
       <button class="btn btn-ghost" id="testAlertBtn">🔔 Test alert</button>
     </div>
-    </section>
+  </section>
   
-
   <section class="panel log-panel">
     <div class="panel-head">
-      <span class="eyebrow">04 · ALERT LOG</span>
+      <span class="eyebrow">05 · ALERT LOG</span>
       <h2>Events</h2>
       <p>Sudden drops and test alerts, most recent first.</p>
     </div>
@@ -156,11 +174,12 @@
 </main>
 
 <footer class="app-footer">
-  <p>Altiguard runs entirely in this browser tab — nothing is sent to a server. All data stays on this device.</p>
+  <p>Altiguard runs entirely in this browser tab. Powered by Leaflet & Socket.io.</p>
 </footer>
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-  
-<script src="/socket.io/socket.io.js"></script>
-<script src="script.js"></script>
+
+  <!-- Free Leaflet Map Script (No API Key Required) -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="script.js"></script>
 </body>
 </html>
