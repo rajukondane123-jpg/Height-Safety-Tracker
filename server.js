@@ -2,11 +2,16 @@ const express = require('express');
 const app = express();
 const http = require('http').createServer(app);
 const io = require('socket.io')(http);
+const twilio = require('twilio');
+
+const twilioClient = process.env.TWILIO_ACCOUNT_SID 
+  ? twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN) 
+  : null;
 
 app.use(express.static(__dirname));
 
 const rooms = {};
-const roomReferences = {}; // Stores the fixed ground level (0m) for each room
+const roomReferences = {};
 
 io.on('connection', (socket) => {
   let currentRoom = null;
@@ -17,10 +22,10 @@ io.on('connection', (socket) => {
     socket.join(roomCode);
     
     if (!rooms[roomCode]) rooms[roomCode] = [];
-    if (roomReferences[roomCode] === undefined) roomReferences[roomCode] = 0; // Default to 0
+    if (roomReferences[roomCode] === undefined) roomReferences[roomCode] = 0;
     
     socket.emit('syncGroup', rooms[roomCode]);
-    socket.emit('syncReference', roomReferences[roomCode]); // Send zero level to new user
+    socket.emit('syncReference', roomReferences[roomCode]);
   });
 
   socket.on('updateGroup', (newGroupData) => {
@@ -30,16 +35,27 @@ io.on('connection', (socket) => {
     }
   });
 
-  // When Admin updates the fixed ground level
   socket.on('updateReference', (newRef) => {
     if (currentRoom) {
       roomReferences[currentRoom] = newRef;
-      io.to(currentRoom).emit('syncReference', newRef); // Update everyone instantly
+      io.to(currentRoom).emit('syncReference', newRef);
     }
   });
 
   socket.on('triggerAlert', (alertData) => {
     if (currentRoom) socket.to(currentRoom).emit('receiveAlert', alertData);
+
+    const targetManagerPhone = alertData.managerPhone || process.env.MANAGER_PHONE;
+
+    if (twilioClient && targetManagerPhone && !alertData.test) {
+      const workerInfo = alertData.phone ? `${alertData.name} (${alertData.phone})` : alertData.name;
+      
+      twilioClient.messages.create({
+        body: `⚠️ URGENT [Altiguard]: Sudden drop detected! Worker ${workerInfo} dropped ${alertData.drop}m.`,
+        from: process.env.TWILIO_PHONE,
+        to: targetManagerPhone
+      }).catch(err => console.error("Twilio SMS Error:", err));
+    }
   });
 });
 
