@@ -1,8 +1,6 @@
 /* ============================================================
    ALTIGUARD
    Group elevation tracking + sudden-drop alerting.
-   Pure client-side: everything lives in localStorage, nothing
-   is sent anywhere. Safe to host as a static site (GitHub Pages).
    ============================================================ */
 
 (function () {
@@ -12,7 +10,6 @@
 
   const STORAGE = { settings: "altiguard_settings_v1" };
 
-  // Keep this to save personal limit settings locally
   function saveJSON(key, value) {
     try { localStorage.setItem(key, JSON.stringify(value)); } catch (e) {}
   }
@@ -36,28 +33,24 @@
     render(); 
   });
    
-  // Ask server to join default room on load
   socket.emit('joinRoom', currentRoom);
 
-  // Listen for the button click to change rooms
   document.getElementById("joinRoomBtn").addEventListener("click", () => {
     const code = document.getElementById("groupCodeInput").value.trim();
     if (code) {
       currentRoom = code;
       socket.emit('joinRoom', currentRoom);
-      alerts = []; // clear local alerts on room switch
+      alerts = []; 
       stopTracking();
       alert(`Joined group: ${currentRoom}`);
     }
   });
 
-  // When server sends new group data (someone else moved or joined)
   socket.on('syncGroup', (serverGroup) => {
     group = serverGroup;
     render();
   });
 
-  // When someone else's phone triggers a drop alert
   socket.on('receiveAlert', (entry) => {
     alerts.unshift(entry);
     if (alerts.length > 50) alerts.length = 50;
@@ -68,21 +61,17 @@
     if (entry.personId) flashFigure(entry.personId);
   });
 
-  // Helper to send data to server instead of localStorage
   function syncToServer() {
     socket.emit('updateGroup', group);
   }
    
   let manualMode = false;
-  let pendingCapture = null; // { lat, lon, height, accuracy, method }
-
+  let pendingCapture = null;
   let livePersonId = null;
   let watchId = null;
-  let liveHistory = []; // [{ t, h }] for the live-tracked person
-
+  let liveHistory = [];
   let baroSensor = null;
-  let baroBaseline = null; // reference pressure (hPa) captured at start
-
+  let baroBaseline = null; 
   let audioCtx = null;
   let bannerTimeout = null;
 
@@ -103,10 +92,9 @@
     return (n >= 0 ? "+" : "") + v;
   }
 
-    function getGroupReference() {
+  function getGroupReference() {
     return globalReference;
   }
-
 
   function statusFor(rel) {
     if (rel > settings.limit) return "above";
@@ -147,9 +135,7 @@
     try {
       audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
       if (audioCtx.state === "suspended") audioCtx.resume();
-    } catch (e) {
-      /* Web Audio unavailable — visual + vibration alerts still work */
-    }
+    } catch (e) {}
   }
 
   function beep() {
@@ -172,12 +158,12 @@
         }
         t += dur;
       });
-    } catch (e) { /* ignore */ }
+    } catch (e) {}
   }
 
   function vibrate() {
     if (navigator.vibrate) {
-      try { navigator.vibrate([200, 100, 200, 100, 400]); } catch (e) { /* ignore */ }
+      try { navigator.vibrate([200, 100, 200, 100, 400]); } catch (e) {}
     }
   }
 
@@ -200,7 +186,7 @@
             setBaroStatus("off", "Permission denied — using GPS altitude instead.");
             return;
           }
-        } catch (e) { /* 'barometer' may not be queryable — try instantiating anyway */ }
+        } catch (e) {}
       }
       // eslint-disable-next-line no-undef
       baroSensor = new Barometer({ frequency: 1 });
@@ -428,7 +414,7 @@
     renderRoster();
     renderGraph();
     renderLog();
-     if (typeof renderMap === "function") renderMap();
+    if (typeof renderMap === "function") renderMap();
   }
 
   function renderRoster() {
@@ -550,7 +536,8 @@
       </li>`;
     }).join("");
   }
-     /* ---------------- wiring ---------------- */
+
+  /* ---------------- wiring ---------------- */
 
   function init() {
     document.getElementById("limitInput").value = settings.limit;
@@ -564,7 +551,6 @@
 
     document.getElementById("captureBtn").addEventListener("click", capture);
 
-    // Admin sets new fixed ground level
     document.getElementById("setRefBtn").addEventListener("click", () => {
       const val = parseFloat(document.getElementById("referenceInput").value);
       if (!isNaN(val)) {
@@ -681,7 +667,7 @@
     map = new google.maps.Map(document.getElementById("map"), {
       center: { lat: 20.5937, lng: 78.9629 }, // Default center (India)
       zoom: 5,
-      mapTypeId: 'terrain' // Terrain view is best for elevation
+      mapTypeId: 'terrain'
     });
     renderMap();
   };
@@ -689,14 +675,12 @@
   function renderMap() {
     if (!map) return;
     
-    // Clear old markers
     Object.values(markers).forEach(m => m.setMap(null));
     markers = {};
 
     let bounds = new google.maps.LatLngBounds();
     let hasValidCoords = false;
 
-    // Loop through the group and place a pin for everyone with GPS
     group.forEach(p => {
       if (p.lat && p.lon) {
         const pos = { lat: p.lat, lng: p.lon };
@@ -712,10 +696,7 @@
       }
     });
 
-    if (hasValidCoords) map.fitBounds(bounds); // Auto-zoom to fit everyone on screen
+    if (hasValidCoords) map.fitBounds(bounds);
   }
 
 })();
-
-
-  
