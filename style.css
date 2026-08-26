@@ -613,3 +613,50 @@ button { font-family: inherit; }
   .log-panel { grid-area: log; }
   .map-panel { grid-area: map; }
 }
+/* ============================================================
+   VISUAL UPGRADES: Structural Health & Surveying Theme
+   ============================================================ */
+
+/* 1. Monospace Tabular Numbers (stops numbers from jittering left/right) */
+input, .roster-status, .figure-readout, .roster-coords, .log-time, .readout-ok, .readout-warn {
+  font-variant-numeric: tabular-nums;
+}
+
+/* 2. Phosphor Glows for Readouts & LEDs */
+.readout-ok { text-shadow: 0 0 10px rgba(47, 212, 196, 0.4); }
+.readout-warn { text-shadow: 0 0 10px rgba(245, 166, 35, 0.4); }
+.readout-error { text-shadow: 0 0 10px rgba(255, 77, 94, 0.4); }
+
+/* 3. Tactical Grid Overlay (Replaces the plain background) */
+.topo-bg {
+  background:
+    linear-gradient(rgba(47, 212, 196, 0.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(47, 212, 196, 0.04) 1px, transparent 1px),
+    radial-gradient(circle at 18% 24%, rgba(47, 212, 196, 0.06), transparent 42%),
+    radial-gradient(circle at 82% 74%, rgba(245, 166, 35, 0.05), transparent 46%),
+    var(--bg);
+  background-size: 40px 40px, 40px 40px, 100% 100%, 100% 100%, 100% 100%;
+  background-position: center center;
+}
+
+/* 4. Smooth Figure Transitions on the Graph */
+.figure {
+  transition: transform 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* 5. Magic Dark-Mode Map Filter */
+.leaflet-layer, .leaflet-control-zoom-in, .leaflet-control-zoom-out, .leaflet-control-attribution {
+  filter: invert(1) hue-rotate(180deg) brightness(105%) contrast(85%);
+}
+
+/* 6. Custom Surveying Crosshair Marker */
+.custom-crosshair { background: transparent; border: none; }
+.custom-crosshair svg { 
+  filter: drop-shadow(0 0 4px rgba(245, 166, 35, 0.8)); 
+  animation: pulseCrosshair 2s infinite ease-in-out; 
+}
+@keyframes pulseCrosshair { 
+  0%, 100% { opacity: 1; transform: scale(1); } 
+  50% { opacity: 0.6; transform: scale(0.85); } 
+}
+
