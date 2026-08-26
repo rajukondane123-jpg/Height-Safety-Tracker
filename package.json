@@ -3,6 +3,9 @@
   "version": "1.0.0",
   "description": "Real-time elevation tracker with anonymous ntfy.sh alerts",
   "main": "server.js",
+  "engines": {
+    "node": ">=18.0.0"
+  },
   "scripts": {
     "start": "node server.js"
   },
