@@ -11,38 +11,51 @@
   /* ---------------- storage ---------------- */
 
   const STORAGE = {
-    group: "altiguard_group_v1",
-    settings: "altiguard_settings_v1",
-    alerts: "altiguard_alerts_v1",
-  };
+    // --- REAL-TIME NETWORKING ---
+  const socket = io();
+  let currentRoom = "TEAM123"; 
 
-  function loadJSON(key, fallback) {
-    try {
-      const raw = localStorage.getItem(key);
-      return raw ? JSON.parse(raw) : fallback;
-    } catch (e) {
-      return fallback;
+  let group = [];
+  let settings = { limit: 2, dropThreshold: 1.5, dropWindow: 4 };
+  let alerts = [];
+
+  // Ask server to join default room on load
+  socket.emit('joinRoom', currentRoom);
+
+  // Listen for the button click to change rooms
+  document.getElementById("joinRoomBtn").addEventListener("click", () => {
+    const code = document.getElementById("groupCodeInput").value.trim();
+    if (code) {
+      currentRoom = code;
+      socket.emit('joinRoom', currentRoom);
+      alerts = []; // clear local alerts on room switch
+      stopTracking();
+      alert(`Joined group: ${currentRoom}`);
     }
-  }
-
-  function saveJSON(key, value) {
-    try {
-      localStorage.setItem(key, JSON.stringify(value));
-    } catch (e) {
-      /* storage unavailable or full — app still works for this session */
-    }
-  }
-
-  /* ---------------- state ---------------- */
-
-  let group = loadJSON(STORAGE.group, []);
-  let settings = loadJSON(STORAGE.settings, {
-    limit: 2,
-    dropThreshold: 1.5,
-    dropWindow: 4,
   });
-  let alerts = loadJSON(STORAGE.alerts, []);
 
+  // When server sends new group data (someone else moved or joined)
+  socket.on('syncGroup', (serverGroup) => {
+    group = serverGroup;
+    render();
+  });
+
+  // When someone else's phone triggers a drop alert
+  socket.on('receiveAlert', (entry) => {
+    alerts.unshift(entry);
+    if (alerts.length > 50) alerts.length = 50;
+    renderLog();
+    showAlertBanner(`⚠️ Sudden drop — ${entry.name} dropped ${entry.drop} m`);
+    vibrate();
+    beep();
+    if (entry.personId) flashFigure(entry.personId);
+  });
+
+  // Helper to send data to server instead of localStorage
+  function syncToServer() {
+    socket.emit('updateGroup', group);
+  }
+   
   let manualMode = false;
   let pendingCapture = null; // { lat, lon, height, accuracy, method }
 
