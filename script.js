@@ -346,7 +346,7 @@
     person.updatedAt = new Date().toISOString();
 
     checkDrop(person);
-    saveJSON(STORAGE.group, group);
+    syncToServer();
     render();
   }
 
@@ -383,7 +383,7 @@
     };
     alerts.unshift(entry);
     if (alerts.length > 50) alerts.length = 50;
-    saveJSON(STORAGE.alerts, alerts);
+    socket.emit('triggerAlert', entry);
     renderLog();
     showAlertBanner(`${isTest ? "[TEST] " : ""}\u26a0 Sudden height drop \u2014 ${entry.name} dropped ${entry.drop} m`);
     vibrate();
@@ -584,7 +584,7 @@
         method: personData.method,
         addedAt: new Date().toISOString(),
       });
-      saveJSON(STORAGE.group, group);
+      syncToServer();
       resetForm();
       render();
     });
@@ -599,7 +599,7 @@
         const id = removeBtn.dataset.id;
         if (livePersonId === id) stopTracking();
         group = group.filter((p) => p.id !== id);
-        saveJSON(STORAGE.group, group);
+        syncToServer();
         render();
       }
     });
@@ -640,7 +640,7 @@
       if (!confirm("Clear the entire group? This cannot be undone.")) return;
       stopTracking();
       group = [];
-      saveJSON(STORAGE.group, group);
+      syncToServer();
       render();
     });
 
