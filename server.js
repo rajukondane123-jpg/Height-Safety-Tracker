@@ -4,6 +4,10 @@ const http = require('http').createServer(app);
 const io = require('socket.io')(http);
 
 app.use(express.static(__dirname));
+
+// Keep-alive health check endpoint
+app.get('/ping', (req, res) => res.status(200).send('Server active'));
+
 const rooms = {};
 const roomReferences = {};
 
@@ -37,25 +41,29 @@ io.on('connection', (socket) => {
   });
 
   socket.on('triggerAlert', (alertData) => {
-    // 1. Broadcast alert to all clients in the room
     if (currentRoom) socket.to(currentRoom).emit('receiveAlert', alertData);
 
-    // 2. Anonymous Ntfy.sh Push Notification
-    const topic = alertData.ntfyTopic; // The secret topic entered in the UI
+    const topic = alertData.ntfyTopic;
     
     if (topic) {
       const workerInfo = alertData.phone ? `${alertData.name} (${alertData.phone})` : alertData.name;
-      const message = `Worker ${workerInfo} just dropped ${alertData.drop}m. Please check their status immediately.`;
+      const message = `Worker ${workerInfo} dropped ${alertData.drop}m. Check status immediately.`;
       
-      // Native Node fetch request to ntfy.sh
+      const headers = {
+        'Title': 'URGENT: Altiguard Drop Detected!',
+        'Priority': 'urgent',
+        'Tags': 'rotating_light,warning,sos'
+      };
+
+      // Add clickable map link if coordinates are present
+      if (alertData.lat && alertData.lon) {
+        headers['Click'] = `https://www.google.com/maps?q=${alertData.lat},${alertData.lon}`;
+      }
+
       fetch(`https://ntfy.sh/${topic}`, {
         method: 'POST',
         body: message,
-        headers: {
-            'Title': 'URGENT: Altiguard Drop Detected!', // <-- Emoji strictly removed
-            'Priority': 'urgent',
-            'Tags': 'rotating_light,warning,sos'
-        }
+        headers: headers
       })
       .then(res => console.log(`Ntfy sent with status: ${res.status}`))
       .catch(err => console.error("Ntfy Error:", err));
