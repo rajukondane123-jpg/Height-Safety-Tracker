@@ -550,8 +550,7 @@
       </li>`;
     }).join("");
   }
-
-  /* ---------------- wiring ---------------- */
+     /* ---------------- wiring ---------------- */
 
   function init() {
     document.getElementById("limitInput").value = settings.limit;
@@ -564,13 +563,15 @@
     initBarometer();
 
     document.getElementById("captureBtn").addEventListener("click", capture);
+
+    // Admin sets new fixed ground level
     document.getElementById("setRefBtn").addEventListener("click", () => {
       const val = parseFloat(document.getElementById("referenceInput").value);
       if (!isNaN(val)) {
         socket.emit('updateReference', val); 
       }
     });
-     
+
     document.getElementById("manualToggle").addEventListener("click", () => {
       manualMode = !manualMode;
       document.getElementById("manualFields").hidden = !manualMode;
@@ -671,16 +672,16 @@
   }
 
   document.addEventListener("DOMContentLoaded", init);
-})();
+
   /* ---------------- google maps ---------------- */
   let map;
   let markers = {};
 
   window.initMap = function () {
     map = new google.maps.Map(document.getElementById("map"), {
-      center: { lat: 20.5937, lng: 78.9629 }, 
+      center: { lat: 20.5937, lng: 78.9629 }, // Default center (India)
       zoom: 5,
-      mapTypeId: 'terrain'
+      mapTypeId: 'terrain' // Terrain view is best for elevation
     });
     renderMap();
   };
@@ -688,22 +689,33 @@
   function renderMap() {
     if (!map) return;
     
+    // Clear old markers
     Object.values(markers).forEach(m => m.setMap(null));
     markers = {};
+
     let bounds = new google.maps.LatLngBounds();
     let hasValidCoords = false;
 
+    // Loop through the group and place a pin for everyone with GPS
     group.forEach(p => {
       if (p.lat && p.lon) {
         const pos = { lat: p.lat, lng: p.lon };
         const marker = new google.maps.Marker({
-          position: pos, map: map, title: p.name, label: p.name.charAt(0).toUpperCase()
+          position: pos,
+          map: map,
+          title: p.name,
+          label: p.name.charAt(0).toUpperCase()
         });
         markers[p.id] = marker;
         bounds.extend(pos);
         hasValidCoords = true;
       }
     });
-    if (hasValidCoords) map.fitBounds(bounds);
+
+    if (hasValidCoords) map.fitBounds(bounds); // Auto-zoom to fit everyone on screen
   }
 
+})();
+
+
+  
