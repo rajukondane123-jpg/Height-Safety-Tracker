@@ -44,7 +44,7 @@ io.on('connection', (socket) => {
     // 2. Anonymous Ntfy.sh Push Notification
     const topic = alertData.ntfyTopic; // The secret topic entered in the UI
     
-    if (topic && !alertData.test) {
+    if (topic) {
       const workerInfo = alertData.phone ? `${alertData.name} (${alertData.phone})` : alertData.name;
       const message = `Worker ${workerInfo} just dropped ${alertData.drop}m. Please check their status immediately.`;
       
