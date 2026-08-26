@@ -444,56 +444,11 @@
     setTimeout(() => el.classList.remove("figure-flash"), 4000);
   }
 
-  // --- RESTORED MAP FUNCTIONS ---
-  function initMap() {
-    const mapEl = document.getElementById("map");
-    if (!mapEl || typeof L === "undefined") return;
-    
-    // Centers by default over India coordinates
-    map = L.map('map').setView([20.5937, 78.9629], 5);
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      attribution: '&copy; OpenStreetMap contributors'
-    }).addTo(map);
-  }
-
-  function renderMap() {
-    if (!map) return;
-    
-    const currentIds = group.map(p => p.id);
-    for (let id in markers) {
-      if (!currentIds.includes(id)) {
-        map.removeLayer(markers[id]);
-        delete markers[id];
-      }
-    }
-
-    let bounds = [];
-    group.forEach(p => {
-      if (p.lat !== null && p.lon !== null && p.lat !== undefined && p.lon !== undefined) {
-        const latlng = [p.lat, p.lon];
-        bounds.push(latlng);
-        
-        if (markers[p.id]) {
-          markers[p.id].setLatLng(latlng);
-          markers[p.id].getPopup().setContent(`<b>${escapeHtml(p.name)}</b><br>${p.height.toFixed(2)}m`);
-        } else {
-          const marker = L.marker(latlng).addTo(map);
-          marker.bindPopup(`<b>${escapeHtml(p.name)}</b><br>${p.height.toFixed(2)}m`);
-          markers[p.id] = marker;
-        }
-      }
-    });
-
-    if (bounds.length > 0) {
-      map.fitBounds(bounds, { padding: [30, 30], maxZoom: 16 });
-    }
-  }
-
   function render() {
     renderRoster();
     renderGraph();
     renderLog();
-    renderMap(); // Triggers the map update
+    renderMap(); 
   }
 
   function renderRoster() {
@@ -618,6 +573,67 @@
         <span class="log-text">${a.test ? "[TEST] " : ""}${escapeHtml(a.name)} dropped <strong>${a.drop} m</strong></span>
       </li>`;
     }).join("");
+  }
+
+  // --- MAP ENHANCEMENTS (TopoMap + Surveyor Crosshairs) ---
+  function initMap() {
+    const mapEl = document.getElementById("map");
+    if (!mapEl || typeof L === "undefined") return;
+    
+    map = L.map('map').setView([20.5937, 78.9629], 5);
+    
+    // Topographic Map Layer
+    L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', {
+      maxZoom: 17,
+      attribution: '&copy; OpenTopoMap'
+    }).addTo(map);
+  }
+
+  function renderMap() {
+    if (!map) return;
+    
+    const currentIds = group.map(p => p.id);
+    for (let id in markers) {
+      if (!currentIds.includes(id)) {
+        map.removeLayer(markers[id]);
+        delete markers[id];
+      }
+    }
+
+    // Custom Theodolite / Surveyor Crosshair Icon
+    const crosshairIcon = L.divIcon({
+      className: 'custom-crosshair',
+      html: `<svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="#f5a623" stroke-width="1.5">
+               <circle cx="12" cy="12" r="6"></circle>
+               <circle cx="12" cy="12" r="1" fill="#f5a623"></circle>
+               <line x1="12" y1="0" x2="12" y2="24"></line>
+               <line x1="0" y1="12" x2="24" y2="12"></line>
+             </svg>`,
+      iconSize: [30, 30],
+      iconAnchor: [15, 15],
+      popupAnchor: [0, -15]
+    });
+
+    let bounds = [];
+    group.forEach(p => {
+      if (p.lat !== null && p.lon !== null && p.lat !== undefined && p.lon !== undefined) {
+        const latlng = [p.lat, p.lon];
+        bounds.push(latlng);
+        
+        if (markers[p.id]) {
+          markers[p.id].setLatLng(latlng);
+          markers[p.id].getPopup().setContent(`<b>${escapeHtml(p.name)}</b><br>${p.height.toFixed(2)}m`);
+        } else {
+          const marker = L.marker(latlng, { icon: crosshairIcon }).addTo(map);
+          marker.bindPopup(`<b>${escapeHtml(p.name)}</b><br>${p.height.toFixed(2)}m`);
+          markers[p.id] = marker;
+        }
+      }
+    });
+
+    if (bounds.length > 0) {
+      map.fitBounds(bounds, { padding: [40, 40], maxZoom: 16 });
+    }
   }
 
   function init() {
@@ -751,8 +767,8 @@
       if (input) input.addEventListener("input", saveSettings);
     });
 
-    initMap();       // <--- Triggers the map to load on startup
-    initBarometer();
+    initMap();       // Initialize Leaflet Map
+    initBarometer(); // Initialize Barometer
     render();
   }
 
