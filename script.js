@@ -8,15 +8,25 @@
 (function () {
   "use strict";
 
-  /* ---------------- storage ---------------- */
+  /* ---------------- storage & networking ---------------- */
 
-  const STORAGE = {
-    // --- REAL-TIME NETWORKING ---
+  const STORAGE = { settings: "altiguard_settings_v1" };
+
+  // Keep this to save personal limit settings locally
+  function saveJSON(key, value) {
+    try { localStorage.setItem(key, JSON.stringify(value)); } catch (e) {}
+  }
+  function loadJSON(key, fallback) {
+    try { const raw = localStorage.getItem(key); return raw ? JSON.parse(raw) : fallback; } catch (e) { return fallback; }
+  }
+
+  let settings = loadJSON(STORAGE.settings, { limit: 2, dropThreshold: 1.5, dropWindow: 4 });
+
+  // --- REAL-TIME NETWORKING ---
   const socket = io();
   let currentRoom = "TEAM123"; 
 
   let group = [];
-  let settings = { limit: 2, dropThreshold: 1.5, dropWindow: 4 };
   let alerts = [];
 
   // Ask server to join default room on load
