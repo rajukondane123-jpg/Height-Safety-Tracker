@@ -15,7 +15,6 @@
     try { const raw = localStorage.getItem(key); return raw ? JSON.parse(raw) : fallback; } catch (e) { return fallback; }
   }
 
-  // Load settings (Updated for ntfy topic)
   let settings = loadJSON(STORAGE.settings, { 
     limit: 2, 
     dropThreshold: 1.5, 
@@ -32,22 +31,26 @@
 
   socket.on('syncReference', (refValue) => {
     globalReference = refValue;
-    document.getElementById("referenceInput").value = refValue;
+    const refInput = document.getElementById("referenceInput");
+    if (refInput) refInput.value = refValue;
     render(); 
   });
    
   socket.emit('joinRoom', currentRoom);
 
-  document.getElementById("joinRoomBtn").addEventListener("click", () => {
-    const code = document.getElementById("groupCodeInput").value.trim();
-    if (code) {
-      currentRoom = code;
-      socket.emit('joinRoom', currentRoom);
-      alerts = []; 
-      stopTracking();
-      alert(`Joined group: ${currentRoom}`);
-    }
-  });
+  const joinRoomBtn = document.getElementById("joinRoomBtn");
+  if (joinRoomBtn) {
+    joinRoomBtn.addEventListener("click", () => {
+      const codeInput = document.getElementById("groupCodeInput");
+      const code = codeInput ? codeInput.value.trim() : "";
+      if (code) {
+        currentRoom = code;
+        socket.emit('joinRoom', currentRoom);
+        alerts = []; 
+        stopTracking();
+      }
+    });
+  }
 
   socket.on('syncGroup', (serverGroup) => {
     group = serverGroup;
@@ -63,8 +66,7 @@
     beep();
     if (entry.personId) flashFigure(entry.personId);
     
-    // Fallback Local Browser Push Notification
-    if (Notification && Notification.permission === "granted") {
+    if (window.Notification && Notification.permission === "granted") {
       new Notification(`⚠️ Drop Alert: ${entry.name}`, { body: `${entry.name} dropped ${entry.drop}m` });
     }
   });
@@ -194,7 +196,6 @@
           }
         } catch (e) {}
       }
-      // eslint-disable-next-line no-undef
       baroSensor = new Barometer({ frequency: 1 });
       baroSensor.addEventListener("reading", () => {
         if (baroBaseline === null) baroBaseline = baroSensor.pressure;
@@ -221,6 +222,7 @@
   function setPill(pillId, ledId, state, title) {
     const pill = document.getElementById(pillId);
     const led = document.getElementById(ledId);
+    if (!pill || !led) return;
     led.classList.remove("active", "warn", "danger");
     if (state === "on") led.classList.add("active");
     else if (state === "warn") led.classList.add("warn");
@@ -235,11 +237,11 @@
   function capture() {
     const readout = document.getElementById("captureReadout");
     if (!navigator.geolocation) {
-      readout.innerHTML = '<span class="readout-error">Geolocation isn\u2019t supported here — use manual entry.</span>';
+      if (readout) readout.innerHTML = '<span class="readout-error">Geolocation isn\u2019t supported here — use manual entry.</span>';
       return;
     }
     unlockAudio();
-    readout.innerHTML = '<span class="readout-pending">Getting location\u2026</span>';
+    if (readout) readout.innerHTML = '<span class="readout-pending">Getting location\u2026</span>';
 
     navigator.geolocation.getCurrentPosition(
       (pos) => {
@@ -248,17 +250,17 @@
 
         if (altitude === null || altitude === undefined) {
           pendingCapture = { lat: latitude, lon: longitude, height: null, accuracy, method: "gps-no-altitude" };
-          readout.innerHTML = `<span class="readout-warn">No altitude from GPS (common indoors). Switch to manual entry to set a height.</span>`;
+          if (readout) readout.innerHTML = `<span class="readout-warn">No altitude from GPS. Switch to manual entry to set height.</span>`;
           updateAddButtonState();
           return;
         }
 
         pendingCapture = { lat: latitude, lon: longitude, height: altitude, accuracy, method: "gps" };
-        readout.innerHTML = `<span class="readout-ok">\u2713 ${altitude.toFixed(2)} m \u00b7 ${latitude.toFixed(5)}, ${longitude.toFixed(5)}</span>`;
+        if (readout) readout.innerHTML = `<span class="readout-ok">\u2713 ${altitude.toFixed(2)} m \u00b7 ${latitude.toFixed(5)}, ${longitude.toFixed(5)}</span>`;
         updateAddButtonState();
       },
       (err) => {
-        readout.innerHTML = `<span class="readout-error">${escapeHtml(err.message || "Could not get location")} \u2014 try manual entry.</span>`;
+        if (readout) readout.innerHTML = `<span class="readout-error">${escapeHtml(err.message || "Could not get location")} — try manual entry.</span>`;
       },
       { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
     );
@@ -266,27 +268,32 @@
 
   function hasValidPending() {
     if (manualMode) {
-      const h = parseFloat(document.getElementById("manualHeight").value);
+      const el = document.getElementById("manualHeight");
+      const h = el ? parseFloat(el.value) : NaN;
       return !isNaN(h);
     }
     return !!(pendingCapture && pendingCapture.height !== null && pendingCapture.height !== undefined);
   }
 
   function updateAddButtonState() {
-    document.getElementById("addBtn").disabled = !hasValidPending();
+    const addBtn = document.getElementById("addBtn");
+    if (addBtn) addBtn.disabled = !hasValidPending();
   }
 
   function resetForm() {
-    document.getElementById("nameInput").value = "";
-    document.getElementById("workerPhoneInput").value = "";
-    document.getElementById("manualHeight").value = "";
-    document.getElementById("manualLat").value = "";
-    document.getElementById("manualLon").value = "";
-    document.getElementById("captureReadout").innerHTML = "";
+    const fields = ["nameInput", "workerPhoneInput", "manualHeight", "manualLat", "manualLon"];
+    fields.forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.value = "";
+    });
+    const readout = document.getElementById("captureReadout");
+    if (readout) readout.innerHTML = "";
     pendingCapture = null;
     manualMode = false;
-    document.getElementById("manualFields").hidden = true;
-    document.getElementById("manualToggle").textContent = "Enter manually";
+    const manualFields = document.getElementById("manualFields");
+    if (manualFields) manualFields.hidden = true;
+    const manualToggle = document.getElementById("manualToggle");
+    if (manualToggle) manualToggle.textContent = "Enter manually";
     updateAddButtonState();
   }
 
@@ -392,15 +399,20 @@
   }
 
   function triggerAlert(person, dropAmount, isTest) {
+    const topicInput = document.getElementById("ntfyTopicInput");
+    const activeTopic = topicInput ? topicInput.value.trim() : (settings.ntfyTopic || "");
+
     const entry = {
       id: uid(),
       name: person ? person.name : "Test person",
       phone: person ? person.phone : "",
       personId: person ? person.id : null,
       drop: Number(dropAmount.toFixed(2)),
+      lat: person ? person.lat : null,
+      lon: person ? person.lon : null,
       time: new Date().toISOString(),
       test: !!isTest,
-      ntfyTopic: document.getElementById("ntfyTopicInput").value.trim()
+      ntfyTopic: activeTopic
     };
     alerts.unshift(entry);
     if (alerts.length > 50) alerts.length = 50;
@@ -414,6 +426,7 @@
 
   function showAlertBanner(msg) {
     const banner = document.getElementById("alertBanner");
+    if (!banner) return;
     banner.textContent = msg;
     banner.classList.add("show");
     clearTimeout(bannerTimeout);
@@ -437,6 +450,7 @@
   function renderRoster() {
     const list = document.getElementById("rosterList");
     const emptyHint = document.getElementById("emptyHint");
+    if (!list || !emptyHint) return;
     if (group.length === 0) {
       list.innerHTML = "";
       emptyHint.hidden = false;
@@ -462,7 +476,7 @@
         </div>
         <div class="roster-status status-${status}">${fmtSigned(rel, 2)} m<small>${statusLabel(status)}</small></div>
         <div class="roster-actions">
-          <button class="mini-btn track-btn ${isLive ? "active" : ""}" data-id="${p.id}">${isLive ? "⏹ Stop" : "🎯 Track"}</button>
+          <button class="mini-btn track-btn ${isLive ? "active" : ""}" data-id="${p.id}">${isLive ? "⏹ Stop" : "Track"}</button>
           <button class="mini-btn remove-btn" data-id="${p.id}" aria-label="Remove ${escapeHtml(p.name)}">✕</button>
         </div>
       </li>`;
@@ -487,6 +501,7 @@
 
   function renderGraph() {
     const svg = document.getElementById("graphSvg");
+    if (!svg) return;
     const W = 640, H = 380;
     const marginL = 58, marginR = 20, marginT = 20, marginB = 46;
     const plotW = W - marginL - marginR;
@@ -521,7 +536,7 @@
     parts.push(`<line class="limit-line" x1="${marginL}" y1="${limitYBot.toFixed(1)}" x2="${marginL + plotW}" y2="${limitYBot.toFixed(1)}"></line>`);
 
     parts.push(`<line class="baseline" x1="${marginL}" y1="${midY.toFixed(1)}" x2="${marginL + plotW}" y2="${midY.toFixed(1)}"></line>`);
-    parts.push(`<text class="baseline-label" x="${marginL + plotW}" y="${(midY - 8).toFixed(1)}" text-anchor="end">GROUP LEVEL \u00b7 0 m</text>`);
+    parts.push(`<text class="baseline-label" x="${marginL + plotW}" y="${(midY - 8).toFixed(1)}" text-anchor="end">GROUP LEVEL · 0 m</text>`);
     parts.push(`<text class="axis-label" x="${marginL - 8}" y="${(midY + 3).toFixed(1)}" text-anchor="end">0</text>`);
 
     const n = group.length;
@@ -540,6 +555,7 @@
   function renderLog() {
     const list = document.getElementById("logList");
     const hint = document.getElementById("logEmptyHint");
+    if (!list || !hint) return;
     if (alerts.length === 0) {
       list.innerHTML = "";
       hint.hidden = false;
@@ -556,178 +572,139 @@
   }
 
   function init() {
-    document.getElementById("limitInput").value = settings.limit;
-    document.getElementById("dropInput").value = settings.dropThreshold;
-    document.getElementById("windowInput").value = settings.dropWindow;
+    const limitIn = document.getElementById("limitInput");
+    const dropIn = document.getElementById("dropInput");
+    const winIn = document.getElementById("windowInput");
+    const topicIn = document.getElementById("ntfyTopicInput");
 
-    // Load anonymous ntfy settings
-    document.getElementById("ntfyTopicInput").value = settings.ntfyTopic || "";
+    if (limitIn) limitIn.value = settings.limit;
+    if (dropIn) dropIn.value = settings.dropThreshold;
+    if (winIn) winIn.value = settings.dropWindow;
+    if (topicIn) topicIn.value = settings.ntfyTopic || "";
 
-    if (Notification && Notification.permission === "default") {
-        Notification.requestPermission();
+    const addForm = document.getElementById("addForm");
+    if (addForm) {
+      addForm.addEventListener("submit", (e) => {
+        e.preventDefault();
+        const nameEl = document.getElementById("nameInput");
+        const phoneEl = document.getElementById("workerPhoneInput");
+        const name = nameEl ? nameEl.value.trim() : "";
+        const phone = phoneEl ? phoneEl.value.trim() : "";
+        if (!name) return;
+
+        let height = 0;
+        let lat = null;
+        let lon = null;
+        let accuracy = null;
+        let method = "manual";
+
+        if (manualMode) {
+          const hEl = document.getElementById("manualHeight");
+          const latEl = document.getElementById("manualLat");
+          const lonEl = document.getElementById("manualLon");
+          height = hEl ? parseFloat(hEl.value) : 0;
+          lat = (latEl && latEl.value) ? parseFloat(latEl.value) : null;
+          lon = (lonEl && lonEl.value) ? parseFloat(lonEl.value) : null;
+          method = "manual";
+        } else if (pendingCapture) {
+          height = pendingCapture.height ?? 0;
+          lat = pendingCapture.lat;
+          lon = pendingCapture.lon;
+          accuracy = pendingCapture.accuracy;
+          method = pendingCapture.method;
+        }
+
+        const person = {
+          id: uid(),
+          name,
+          phone,
+          height,
+          lat,
+          lon,
+          accuracy,
+          method,
+          updatedAt: new Date().toISOString()
+        };
+
+        group.push(person);
+        syncToServer();
+        resetForm();
+        render();
+      });
     }
 
-    setGpsStatus(navigator.geolocation ? "off" : "danger", navigator.geolocation ? "Not yet used." : "Not supported in this browser.");
-    setBaroStatus("off", "Checking\u2026");
-    setLiveStatus("off");
-    initBarometer();
+    const captureBtn = document.getElementById("captureBtn");
+    if (captureBtn) captureBtn.addEventListener("click", capture);
 
-    document.getElementById("captureBtn").addEventListener("click", capture);
-
-    document.getElementById("setRefBtn").addEventListener("click", () => {
-      const val = parseFloat(document.getElementById("referenceInput").value);
-      if (!isNaN(val)) {
-        socket.emit('updateReference', val); 
-      }
-    });
-
-    document.getElementById("manualToggle").addEventListener("click", () => {
-      manualMode = !manualMode;
-      document.getElementById("manualFields").hidden = !manualMode;
-      document.getElementById("manualToggle").textContent = manualMode ? "Use GPS instead" : "Enter manually";
-      updateAddButtonState();
-    });
-
-    document.getElementById("manualHeight").addEventListener("input", updateAddButtonState);
-
-    document.getElementById("addForm").addEventListener("submit", (e) => {
-      e.preventDefault();
-      const name = document.getElementById("nameInput").value.trim();
-      const phone = document.getElementById("workerPhoneInput").value.trim();
-      if (!name) return;
-
-      let personData;
-      if (manualMode) {
-        const h = parseFloat(document.getElementById("manualHeight").value);
-        if (isNaN(h)) return;
-        const lat = parseFloat(document.getElementById("manualLat").value);
-        const lon = parseFloat(document.getElementById("manualLon").value);
-        personData = { lat: isNaN(lat) ? null : lat, lon: isNaN(lon) ? null : lon, height: h, accuracy: null, method: "manual" };
-      } else {
-        if (!pendingCapture || pendingCapture.height === null || pendingCapture.height === undefined) return;
-        personData = pendingCapture;
-      }
-
-      group.push({
-        id: uid(),
-        name,
-        phone,
-        lat: personData.lat,
-        lon: personData.lon,
-        height: personData.height,
-        accuracy: personData.accuracy,
-        method: personData.method,
-        addedAt: new Date().toISOString(),
+    const manualToggle = document.getElementById("manualToggle");
+    if (manualToggle) {
+      manualToggle.addEventListener("click", () => {
+        manualMode = !manualMode;
+        const manualFields = document.getElementById("manualFields");
+        if (manualFields) manualFields.hidden = !manualMode;
+        manualToggle.textContent = manualMode ? "Use GPS capture" : "Enter manually";
+        updateAddButtonState();
       });
-      syncToServer();
-      resetForm();
-      render();
-    });
+    }
 
-    document.getElementById("rosterList").addEventListener("click", (e) => {
-      const trackBtn = e.target.closest(".track-btn");
-      const removeBtn = e.target.closest(".remove-btn");
-      if (trackBtn) {
-        const id = trackBtn.dataset.id;
-        if (livePersonId === id) stopTracking(); else startTracking(id);
-      } else if (removeBtn) {
-        const id = removeBtn.dataset.id;
-        if (livePersonId === id) stopTracking();
-        group = group.filter((p) => p.id !== id);
-        syncToServer();
-        render();
-      }
-    });
+    const manualHeight = document.getElementById("manualHeight");
+    if (manualHeight) manualHeight.addEventListener("input", updateAddButtonState);
 
-    document.getElementById("limitInput").addEventListener("input", (e) => {
-      const v = parseFloat(e.target.value);
-      if (!isNaN(v) && v > 0) { settings.limit = v; saveJSON(STORAGE.settings, settings); render(); }
-    });
-    document.getElementById("dropInput").addEventListener("input", (e) => {
-      const v = parseFloat(e.target.value);
-      if (!isNaN(v) && v > 0) { settings.dropThreshold = v; saveJSON(STORAGE.settings, settings); }
-    });
-    document.getElementById("windowInput").addEventListener("input", (e) => {
-      const v = parseFloat(e.target.value);
-      if (!isNaN(v) && v > 0) { settings.dropWindow = v; saveJSON(STORAGE.settings, settings); }
-    });
-    
-    // Save Ntfy Topic dynamically
-    document.getElementById("ntfyTopicInput").addEventListener("input", (e) => {
-      settings.ntfyTopic = e.target.value.trim();
+    const setRefBtn = document.getElementById("setRefBtn");
+    if (setRefBtn) {
+      setRefBtn.addEventListener("click", () => {
+        const refEl = document.getElementById("referenceInput");
+        const val = refEl ? parseFloat(refEl.value) : 0;
+        if (!isNaN(val)) {
+          globalReference = val;
+          socket.emit('updateReference', val);
+          render();
+        }
+      });
+    }
+
+    const testAlertBtn = document.getElementById("testAlertBtn");
+    if (testAlertBtn) {
+      testAlertBtn.addEventListener("click", () => {
+        triggerAlert(null, 1.80, true);
+      });
+    }
+
+    const rosterList = document.getElementById("rosterList");
+    if (rosterList) {
+      rosterList.addEventListener("click", (e) => {
+        const trackBtn = e.target.closest(".track-btn");
+        const removeBtn = e.target.closest(".remove-btn");
+        if (trackBtn) {
+          const id = trackBtn.dataset.id;
+          if (livePersonId === id) stopTracking();
+          else startTracking(id);
+        } else if (removeBtn) {
+          const id = removeBtn.dataset.id;
+          if (livePersonId === id) stopTracking();
+          group = group.filter(p => p.id !== id);
+          syncToServer();
+          render();
+        }
+      });
+    }
+
+    const saveSettings = () => {
+      if (limitIn) settings.limit = parseFloat(limitIn.value) || 2;
+      if (dropIn) settings.dropThreshold = parseFloat(dropIn.value) || 1.5;
+      if (winIn) settings.dropWindow = parseInt(winIn.value, 10) || 4;
+      if (topicIn) settings.ntfyTopic = topicIn.value.trim();
       saveJSON(STORAGE.settings, settings);
-    });
-
-    document.getElementById("testAlertBtn").addEventListener("click", () => {
-      unlockAudio();
-      const person = group.find((p) => p.id === livePersonId) || group[0] || null;
-      triggerAlert(person, Math.max(settings.dropThreshold, 1.5) + 0.3, true);
-    });
-
-    document.getElementById("exportBtn").addEventListener("click", () => {
-      const data = JSON.stringify({ group, settings, alerts, exportedAt: new Date().toISOString() }, null, 2);
-      const blob = new Blob([data], { type: "application/json" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `altiguard-export-${Date.now()}.json`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-    });
-
-    document.getElementById("clearBtn").addEventListener("click", () => {
-      if (!confirm("Clear the entire group? This cannot be undone.")) return;
-      stopTracking();
-      group = [];
-      syncToServer();
       render();
+    };
+
+    [limitIn, dropIn, winIn, topicIn].forEach(input => {
+      if (input) input.addEventListener("input", saveSettings);
     });
 
+    initBarometer();
     render();
   }
 
   document.addEventListener("DOMContentLoaded", init);
-
-  let map = null;
-  let markerGroup = null;
-  let markers = {};
-
-  function initMap() {
-    if (map) return; 
-    
-    map = L.map('map').setView([20.5937, 78.9629], 5);
-
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      maxZoom: 19,
-      attribution: '© OpenStreetMap contributors'
-    }).addTo(map);
-
-    markerGroup = L.featureGroup().addTo(map);
-  }
-
-  function renderMap() {
-    if (!document.getElementById("map")) return;
-    if (!map) initMap(); 
-    
-    markerGroup.clearLayers();
-    markers = {};
-
-    let hasValidCoords = false;
-
-    group.forEach(p => {
-      if (p.lat && p.lon) {
-        const marker = L.marker([p.lat, p.lon]).bindPopup(`<b>${escapeHtml(p.name)}</b>`);
-        markerGroup.addLayer(marker);
-        markers[p.id] = marker;
-        hasValidCoords = true;
-      }
-    });
-
-    if (hasValidCoords) {
-      map.fitBounds(markerGroup.getBounds(), { padding: [30, 30], maxZoom: 15 });
-    }
-  }
-
 })();
