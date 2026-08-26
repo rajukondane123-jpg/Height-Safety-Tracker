@@ -1,12 +1,10 @@
 /* ============================================================
    ALTIGUARD
-   Group elevation tracking + sudden-drop alerting.
+   Group elevation tracking + sudden-drop alerting + SMS
    ============================================================ */
 
 (function () {
   "use strict";
-
-  /* ---------------- storage & networking ---------------- */
 
   const STORAGE = { settings: "altiguard_settings_v1" };
 
@@ -17,9 +15,14 @@
     try { const raw = localStorage.getItem(key); return raw ? JSON.parse(raw) : fallback; } catch (e) { return fallback; }
   }
 
-  let settings = loadJSON(STORAGE.settings, { limit: 2, dropThreshold: 1.5, dropWindow: 4 });
+  let settings = loadJSON(STORAGE.settings, { 
+    limit: 2, 
+    dropThreshold: 1.5, 
+    dropWindow: 4,
+    managerPhone: "",
+    managerEmail: ""
+  });
 
-  // --- REAL-TIME NETWORKING ---
   const socket = io();
   let currentRoom = "TEAM123"; 
 
@@ -75,7 +78,10 @@
   let audioCtx = null;
   let bannerTimeout = null;
 
-  /* ---------------- helpers ---------------- */
+  // Man Down Timer Variables
+  let inactivityInterval = null;
+  let lastMoveTime = null;
+  let lastValidHeight = null;
 
   function uid() {
     return "p_" + Math.random().toString(36).slice(2, 9) + Date.now().toString(36);
@@ -129,8 +135,6 @@
     return step || 1;
   }
 
-  /* ---------------- audio + haptics ---------------- */
-
   function unlockAudio() {
     try {
       audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
@@ -166,8 +170,6 @@
       try { navigator.vibrate([200, 100, 200, 100, 400]); } catch (e) {}
     }
   }
-
-  /* ---------------- barometer ---------------- */
 
   function pressureToRelativeAltitude(currentHPa, baseHPa) {
     return 44330 * (1 - Math.pow(currentHPa / baseHPa, 1 / 5.255));
@@ -212,8 +214,6 @@
     return null;
   }
 
-  /* ---------------- status pills ---------------- */
-
   function setPill(pillId, ledId, state, title) {
     const pill = document.getElementById(pillId);
     const led = document.getElementById(ledId);
@@ -227,8 +227,6 @@
   function setGpsStatus(state, title) { setPill("gpsPill", "gpsLed", state, title); }
   function setBaroStatus(state, title) { setPill("baroPill", "baroLed", state, title); }
   function setLiveStatus(state, title) { setPill("livePill", "liveLed", state, title); }
-
-  /* ---------------- capture (one-off) ---------------- */
 
   function capture() {
     const readout = document.getElementById("captureReadout");
@@ -276,6 +274,7 @@
 
   function resetForm() {
     document.getElementById("nameInput").value = "";
+    document.getElementById("workerPhoneInput").value = "";
     document.getElementById("manualHeight").value = "";
     document.getElementById("manualLat").value = "";
     document.getElementById("manualLon").value = "";
@@ -287,21 +286,31 @@
     updateAddButtonState();
   }
 
-  /* ---------------- live tracking ---------------- */
-
   function startTracking(id) {
     if (!navigator.geolocation) {
-      showAlertBanner("Geolocation isn\u2019t supported in this browser.");
+      showAlertBanner("Geolocation isn't supported in this browser.");
       return;
     }
     stopTracking();
     unlockAudio();
     livePersonId = id;
     liveHistory = [];
+    lastMoveTime = Date.now();
+    lastValidHeight = null;
+
     watchId = navigator.geolocation.watchPosition(onLiveUpdate, onLiveError, {
       enableHighAccuracy: true, maximumAge: 0, timeout: 20000,
     });
     setLiveStatus("on", "Live tracking a group member.");
+    
+    inactivityInterval = setInterval(() => {
+      if (lastMoveTime && (Date.now() - lastMoveTime > 5 * 60 * 1000)) {
+        showAlertBanner("⚠️ Man Down Warning: No movement detected for 5 minutes.");
+        beep();
+        vibrate();
+      }
+    }, 30000);
+    
     render();
   }
 
@@ -310,6 +319,7 @@
       navigator.geolocation.clearWatch(watchId);
       watchId = null;
     }
+    if (inactivityInterval) clearInterval(inactivityInterval);
     livePersonId = null;
     liveHistory = [];
     setLiveStatus("off");
@@ -338,6 +348,11 @@
     } else {
       height = person.height ?? 0;
       method = "gps-no-altitude";
+    }
+
+    if (lastValidHeight === null || Math.abs(lastValidHeight - height) > 0.5) {
+      lastValidHeight = height;
+      lastMoveTime = Date.now();
     }
 
     person.lat = latitude;
@@ -372,22 +387,23 @@
     }
   }
 
-  /* ---------------- alerts ---------------- */
-
   function triggerAlert(person, dropAmount, isTest) {
     const entry = {
       id: uid(),
       name: person ? person.name : "Test person",
+      phone: person ? person.phone : "",
       personId: person ? person.id : null,
       drop: Number(dropAmount.toFixed(2)),
       time: new Date().toISOString(),
       test: !!isTest,
+      managerPhone: settings.managerPhone || "",
+      managerEmail: settings.managerEmail || ""
     };
     alerts.unshift(entry);
     if (alerts.length > 50) alerts.length = 50;
     socket.emit('triggerAlert', entry);
     renderLog();
-    showAlertBanner(`${isTest ? "[TEST] " : ""}\u26a0 Sudden height drop \u2014 ${entry.name} dropped ${entry.drop} m`);
+    showAlertBanner(`${isTest ? "[TEST] " : ""}⚠️ Sudden height drop — ${entry.name} dropped ${entry.drop} m`);
     vibrate();
     beep();
     if (person) flashFigure(person.id);
@@ -407,8 +423,6 @@
     el.classList.add("figure-flash");
     setTimeout(() => el.classList.remove("figure-flash"), 4000);
   }
-
-  /* ---------------- rendering ---------------- */
 
   function render() {
     renderRoster();
@@ -434,18 +448,19 @@
       const isLive = p.id === livePersonId;
       const coords = (p.lat !== null && p.lat !== undefined && p.lon !== null && p.lon !== undefined)
         ? `${p.lat.toFixed(5)}, ${p.lon.toFixed(5)}` : "No GPS coordinates";
+      const phoneDisplay = p.phone ? `${escapeHtml(p.phone)} · ` : "";
 
       return `
       <li class="roster-item ${isLive ? "is-live" : ""}">
         <div class="roster-info">
           <strong>${escapeHtml(p.name)}</strong>
-          <span class="roster-sub">${p.height.toFixed(2)} m \u00b7 ${methodLabelFor(p.method)}</span>
+          <span class="roster-sub">${phoneDisplay}${p.height.toFixed(2)} m · ${methodLabelFor(p.method)}</span>
           <span class="roster-coords">${coords}</span>
         </div>
         <div class="roster-status status-${status}">${fmtSigned(rel, 2)} m<small>${statusLabel(status)}</small></div>
         <div class="roster-actions">
-          <button class="mini-btn track-btn ${isLive ? "active" : ""}" data-id="${p.id}">${isLive ? "\u23f9 Stop" : "\ud83c\udfaf Track"}</button>
-          <button class="mini-btn remove-btn" data-id="${p.id}" aria-label="Remove ${escapeHtml(p.name)}">\u2715</button>
+          <button class="mini-btn track-btn ${isLive ? "active" : ""}" data-id="${p.id}">${isLive ? "⏹ Stop" : "🎯 Track"}</button>
+          <button class="mini-btn remove-btn" data-id="${p.id}" aria-label="Remove ${escapeHtml(p.name)}">✕</button>
         </div>
       </li>`;
     }).join("");
@@ -454,7 +469,7 @@
   function figureSVG(x, y, status, isLive, name, rel, id) {
     const cls = `figure figure-${status}${isLive ? " figure-live" : ""}`;
     return `
-       <g class="${cls}" data-person-id="${id}" style="--fx: ${x.toFixed(1)}px; --fy: ${y.toFixed(1)}px;">
+    <g class="${cls}" data-person-id="${id}" style="--fx: ${x.toFixed(1)}px; --fy: ${y.toFixed(1)}px;">
       ${isLive ? '<circle class="live-halo" r="14"></circle>' : ""}
       <text class="figure-readout" x="0" y="-28" text-anchor="middle">${fmtSigned(rel, 2)}m</text>
       <circle class="figure-head" cx="0" cy="-14" r="6"></circle>
@@ -537,12 +552,14 @@
     }).join("");
   }
 
-  /* ---------------- wiring ---------------- */
-
   function init() {
     document.getElementById("limitInput").value = settings.limit;
     document.getElementById("dropInput").value = settings.dropThreshold;
     document.getElementById("windowInput").value = settings.dropWindow;
+
+    // Load manager settings
+    document.getElementById("managerPhoneInput").value = settings.managerPhone || "";
+    document.getElementById("managerEmailInput").value = settings.managerEmail || "";
 
     setGpsStatus(navigator.geolocation ? "off" : "danger", navigator.geolocation ? "Not yet used." : "Not supported in this browser.");
     setBaroStatus("off", "Checking\u2026");
@@ -570,6 +587,7 @@
     document.getElementById("addForm").addEventListener("submit", (e) => {
       e.preventDefault();
       const name = document.getElementById("nameInput").value.trim();
+      const phone = document.getElementById("workerPhoneInput").value.trim();
       if (!name) return;
 
       let personData;
@@ -587,6 +605,7 @@
       group.push({
         id: uid(),
         name,
+        phone,
         lat: personData.lat,
         lon: personData.lon,
         height: personData.height,
@@ -626,6 +645,14 @@
       const v = parseFloat(e.target.value);
       if (!isNaN(v) && v > 0) { settings.dropWindow = v; saveJSON(STORAGE.settings, settings); }
     });
+    document.getElementById("managerPhoneInput").addEventListener("input", (e) => {
+      settings.managerPhone = e.target.value.trim();
+      saveJSON(STORAGE.settings, settings);
+    });
+    document.getElementById("managerEmailInput").addEventListener("input", (e) => {
+      settings.managerEmail = e.target.value.trim();
+      saveJSON(STORAGE.settings, settings);
+    });
 
     document.getElementById("testAlertBtn").addEventListener("click", () => {
       unlockAudio();
@@ -659,18 +686,15 @@
 
   document.addEventListener("DOMContentLoaded", init);
 
-    /* ---------------- free openstreetmap (Leaflet) ---------------- */
   let map = null;
   let markerGroup = null;
   let markers = {};
 
   function initMap() {
-    if (map) return; // Map already loaded
+    if (map) return; 
     
-    // Initialize map centered on India
     map = L.map('map').setView([20.5937, 78.9629], 5);
 
-    // Load the free OpenStreetMap tiles
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       maxZoom: 19,
       attribution: '© OpenStreetMap contributors'
@@ -681,18 +705,15 @@
 
   function renderMap() {
     if (!document.getElementById("map")) return;
-    if (!map) initMap(); // Load map on first render
+    if (!map) initMap(); 
     
-    // Clear old markers
     markerGroup.clearLayers();
     markers = {};
 
     let hasValidCoords = false;
 
-    // Loop through the group and place a pin for everyone with GPS
     group.forEach(p => {
       if (p.lat && p.lon) {
-        // Create marker and add a popup with their name
         const marker = L.marker([p.lat, p.lon]).bindPopup(`<b>${escapeHtml(p.name)}</b>`);
         markerGroup.addLayer(marker);
         markers[p.id] = marker;
@@ -700,7 +721,6 @@
       }
     });
 
-    // Auto-zoom to fit everyone on screen
     if (hasValidCoords) {
       map.fitBounds(markerGroup.getBounds(), { padding: [30, 30], maxZoom: 15 });
     }
