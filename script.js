@@ -32,6 +32,8 @@
   // --- MAP VARIABLES ---
   let map = null;
   let markers = {};
+  let amenityLayer = null;
+  let amenityTimeout = null;
 
   socket.on('syncReference', (refValue) => {
     globalReference = refValue;
@@ -575,18 +577,79 @@
     }).join("");
   }
 
-  // --- MAP ENHANCEMENTS (TopoMap + Surveyor Crosshairs) ---
+  // --- MAP ENHANCEMENTS (TopoMap + Surveyor Crosshairs + Nearby Amenities) ---
   function initMap() {
     const mapEl = document.getElementById("map");
     if (!mapEl || typeof L === "undefined") return;
     
     map = L.map('map').setView([20.5937, 78.9629], 5);
     
-    // Topographic Map Layer
     L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', {
       maxZoom: 17,
       attribution: '&copy; OpenTopoMap'
     }).addTo(map);
+
+    amenityLayer = L.layerGroup().addTo(map);
+
+    map.on('moveend', () => {
+      clearTimeout(amenityTimeout);
+      amenityTimeout = setTimeout(fetchAmenities, 2000); 
+    });
+  }
+
+  function fetchAmenities() {
+    if (!map || map.getZoom() < 12) return; 
+
+    const bounds = map.getBounds();
+    const S = bounds.getSouth();
+    const W = bounds.getWest();
+    const N = bounds.getNorth();
+    const E = bounds.getEast();
+    
+    // Scans for Hospitals, Police Stations, and Pharmacies (Medical Stores)
+    const query = `[out:json][timeout:10];(node["amenity"="hospital"](${S},${W},${N},${E});node["amenity"="police"](${S},${W},${N},${E});node["amenity"="pharmacy"](${S},${W},${N},${E}););out;`;
+    const url = `https://overpass-api.de/api/interpreter?data=${encodeURIComponent(query)}`;
+
+    fetch(url)
+      .then(res => res.json())
+      .then(data => {
+        amenityLayer.clearLayers(); 
+        
+        if (data && data.elements) {
+          data.elements.forEach(item => {
+            if (item.lat && item.lon && item.tags && item.tags.amenity) {
+              const amenityType = item.tags.amenity;
+              const name = item.tags.name ? item.tags.name : (amenityType.charAt(0).toUpperCase() + amenityType.slice(1));
+              
+              let emoji = "📍";
+              let color = "#ffffff";
+              let label = "Location";
+
+              // Dynamically color-code based on the facility type
+              if (amenityType === "hospital") {
+                 emoji = "🏥"; color = "#ff4d5e"; label = "Emergency Facility";
+              } else if (amenityType === "police") {
+                 emoji = "🚓"; color = "#3b82f6"; label = "Police Station";
+              } else if (amenityType === "pharmacy") {
+                 emoji = "💊"; color = "#10b981"; label = "Medical Store";
+              }
+
+              const icon = L.divIcon({
+                className: 'custom-amenity',
+                html: `<div style="background: #0a0f1c; border: 2px solid ${color}; border-radius: 50%; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; font-size: 13px; box-shadow: 0 0 10px ${color}80;">${emoji}</div>`,
+                iconSize: [28, 28],
+                iconAnchor: [14, 14],
+                popupAnchor: [0, -14]
+              });
+
+              const marker = L.marker([item.lat, item.lon], { icon: icon });
+              marker.bindPopup(`<b style="color: ${color}; font-family: var(--font-display);">${emoji} ${escapeHtml(name)}</b><br><span style="font-family: var(--font-mono); font-size: 11px; color: var(--text-dim);">${label}</span>`);
+              amenityLayer.addLayer(marker);
+            }
+          });
+        }
+      })
+      .catch(err => console.error("Amenity Fetch Error:", err));
   }
 
   function renderMap() {
@@ -600,7 +663,6 @@
       }
     }
 
-    // Custom Theodolite / Surveyor Crosshair Icon
     const crosshairIcon = L.divIcon({
       className: 'custom-crosshair',
       html: `<svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="#f5a623" stroke-width="1.5">
