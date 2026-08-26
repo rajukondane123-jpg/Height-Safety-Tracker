@@ -454,7 +454,7 @@
   function figureSVG(x, y, status, isLive, name, rel, id) {
     const cls = `figure figure-${status}${isLive ? " figure-live" : ""}`;
     return `
-    <g class="${cls}" data-person-id="${id}" transform="translate(${x.toFixed(1)},${y.toFixed(1)})">
+       <g class="${cls}" data-person-id="${id}" style="--fx: ${x.toFixed(1)}px; --fy: ${y.toFixed(1)}px;">
       ${isLive ? '<circle class="live-halo" r="14"></circle>' : ""}
       <text class="figure-readout" x="0" y="-28" text-anchor="middle">${fmtSigned(rel, 2)}m</text>
       <circle class="figure-head" cx="0" cy="-14" r="6"></circle>
