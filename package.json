@@ -1,14 +1,13 @@
 {
   "name": "altiguard-sync",
   "version": "1.0.0",
-  "description": "Real-time elevation tracker with SMS",
+  "description": "Real-time elevation tracker with anonymous ntfy.sh alerts",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
   },
   "dependencies": {
     "express": "^4.18.2",
-    "socket.io": "^4.7.2",
-    "twilio": "^4.19.0"
+    "socket.io": "^4.7.2"
   }
 }
