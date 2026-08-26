@@ -10,6 +10,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=JetBrains+Mono:wght@400;500;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" /> 
 </head>
 <body>
 <div class="topo-bg" aria-hidden="true"></div>
@@ -157,7 +158,7 @@
 <footer class="app-footer">
   <p>Altiguard runs entirely in this browser tab — nothing is sent to a server. All data stays on this device.</p>
 </footer>
-  <script async defer src="https://maps.googleapis.com/maps/api/js?key=YOUR_API_KEY_HERE&callback=initMap"></script>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   
 <script src="/socket.io/socket.io.js"></script>
 <script src="script.js"></script>
