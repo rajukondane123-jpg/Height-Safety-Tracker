@@ -400,7 +400,7 @@
       drop: Number(dropAmount.toFixed(2)),
       time: new Date().toISOString(),
       test: !!isTest,
-      ntfyTopic: settings.ntfyTopic || ""
+      ntfyTopic: document.getElementById("ntfyTopicInput").value.trim()
     };
     alerts.unshift(entry);
     if (alerts.length > 50) alerts.length = 50;
