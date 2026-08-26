@@ -28,7 +28,14 @@
 
   let group = [];
   let alerts = [];
+  let globalReference = 0;
 
+  socket.on('syncReference', (refValue) => {
+    globalReference = refValue;
+    document.getElementById("referenceInput").value = refValue;
+    render(); 
+  });
+   
   // Ask server to join default room on load
   socket.emit('joinRoom', currentRoom);
 
@@ -96,11 +103,10 @@
     return (n >= 0 ? "+" : "") + v;
   }
 
-  function computeGroupMean() {
-    if (group.length === 0) return null;
-    const sum = group.reduce((acc, p) => acc + p.height, 0);
-    return sum / group.length;
+    function getGroupReference() {
+    return globalReference;
   }
+
 
   function statusFor(rel) {
     if (rel > settings.limit) return "above";
@@ -422,6 +428,7 @@
     renderRoster();
     renderGraph();
     renderLog();
+     if (typeof renderMap === "function") renderMap();
   }
 
   function renderRoster() {
@@ -433,8 +440,8 @@
       return;
     }
     emptyHint.hidden = true;
-    const mean = computeGroupMean();
-
+    const mean = getGroupReference();  
+   
     list.innerHTML = group.map((p) => {
       const rel = p.height - mean;
       const status = statusFor(rel);
@@ -487,7 +494,7 @@
       return;
     }
 
-    const mean = computeGroupMean();
+    const mean = getGroupReference();  
     const rels = group.map((p) => p.height - mean);
     const maxAbs = Math.max(settings.limit * 1.2, ...rels.map((r) => Math.abs(r)), 1);
     const scale = (plotH / 2) / maxAbs;
@@ -557,7 +564,13 @@
     initBarometer();
 
     document.getElementById("captureBtn").addEventListener("click", capture);
-
+    document.getElementById("setRefBtn").addEventListener("click", () => {
+      const val = parseFloat(document.getElementById("referenceInput").value);
+      if (!isNaN(val)) {
+        socket.emit('updateReference', val); 
+      }
+    });
+     
     document.getElementById("manualToggle").addEventListener("click", () => {
       manualMode = !manualMode;
       document.getElementById("manualFields").hidden = !manualMode;
@@ -659,3 +672,38 @@
 
   document.addEventListener("DOMContentLoaded", init);
 })();
+  /* ---------------- google maps ---------------- */
+  let map;
+  let markers = {};
+
+  window.initMap = function () {
+    map = new google.maps.Map(document.getElementById("map"), {
+      center: { lat: 20.5937, lng: 78.9629 }, 
+      zoom: 5,
+      mapTypeId: 'terrain'
+    });
+    renderMap();
+  };
+
+  function renderMap() {
+    if (!map) return;
+    
+    Object.values(markers).forEach(m => m.setMap(null));
+    markers = {};
+    let bounds = new google.maps.LatLngBounds();
+    let hasValidCoords = false;
+
+    group.forEach(p => {
+      if (p.lat && p.lon) {
+        const pos = { lat: p.lat, lng: p.lon };
+        const marker = new google.maps.Marker({
+          position: pos, map: map, title: p.name, label: p.name.charAt(0).toUpperCase()
+        });
+        markers[p.id] = marker;
+        bounds.extend(pos);
+        hasValidCoords = true;
+      }
+    });
+    if (hasValidCoords) map.fitBounds(bounds);
+  }
+
