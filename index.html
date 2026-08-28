@@ -1,271 +1,206 @@
 <!DOCTYPE html>
-<html lang="en" class="dark-theme">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
-    <!-- Viewport optimization for field tablets and mobile hardware -->
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <meta name="theme-color" content="#030712">
-    <meta name="description" content="Altiguard Enterprise v4.0 - Tactical Elevation, Geofencing, and Safety Command Matrix.">
-    <meta name="author" content="Vaibhav Raju Kondane">
-    
-    <title>Altiguard | Tactical Command Kernel v4.0</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="theme-color" content="#0f172a">
+    <title>Altiguard | Live Structural Safety & GPS Matrix</title>
 
-    <!-- ======================================================================= -->
-    <!-- EXTERNAL ASSETS & TYPOGRAPHY                                            -->
-    <!-- ======================================================================= -->
+    <!-- Leaflet Topographical Map CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin=""/>
     
-    <!-- Preconnect to Google Fonts to accelerate Time-to-Interactive (TTI) -->
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <!-- Google Fonts for crisp, user-friendly UI -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
     
-    <!-- Load Enterprise Typography: Rajdhani (Headings), Inter (UI), Fira Code (Data) -->
-    <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;700&family=Inter:wght@300;400;600;700;800&family=Rajdhani:wght@500;600;700;800&display=swap" rel="stylesheet">
-    
-    <!-- Leaflet Mapping CSS (Unpkg CDN) -->
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
-
-    <!-- Internal Tactical Stylesheet -->
+    <!-- Link to our upcoming tactical CSS file -->
     <link rel="stylesheet" href="style.css">
-
 </head>
-<body class="fancy-mode">
+<body>
 
-    <!-- ======================================================================= -->
-    <!-- SVG SPRITE DEFS (Hardware-Accelerated Iconography)                      -->
-    <!-- ======================================================================= -->
-    <svg aria-hidden="true" style="position: absolute; width: 0; height: 0; overflow: hidden;" version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
-        <defs>
-            <symbol id="icon-satellite" viewBox="0 0 24 24">
-                <path fill="currentColor" d="M12,3L4,9V21H20V9L12,3M12,5.53L18,9.53V19H6V9.53L12,5.53M12,11.5A2.5,2.5 0 0,0 9.5,14A2.5,2.5 0 0,0 12,16.5A2.5,2.5 0 0,0 14.5,14A2.5,2.5 0 0,0 12,11.5Z"/>
-            </symbol>
-            <symbol id="icon-radar" viewBox="0 0 24 24">
-                <path fill="currentColor" d="M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2M12,4A8,8 0 0,1 20,12A8,8 0 0,1 12,20A8,8 0 0,1 4,12A8,8 0 0,1 12,4M12,6A6,6 0 0,0 6,12A6,6 0 0,0 12,18A6,6 0 0,0 18,12A6,6 0 0,0 12,6M12,8A4,4 0 0,1 16,12A4,4 0 0,1 12,16A4,4 0 0,1 8,12A4,4 0 0,1 12,8Z"/>
-            </symbol>
-            <symbol id="icon-shield" viewBox="0 0 24 24">
-                <path fill="currentColor" d="M12,1L3,5V11C3,16.55 6.84,21.74 12,23C17.16,21.74 21,16.55 21,11V5L12,1M12,3.19L19,6.3V11C19,15.52 16.02,19.69 12,20.93C7.98,19.69 5,15.52 5,11V6.3L12,3.19Z"/>
-            </symbol>
-            <symbol id="icon-terminal" viewBox="0 0 24 24">
-                <path fill="currentColor" d="M20,19V7H4V19H20M20,3A2,2 0 0,1 22,5V19A2,2 0 0,1 20,21H4A2,2 0 0,1 2,19V5C2,3.89 2.9,3 4,3H20M5.5,15.6L11,10.1L5.5,4.6L6.91,3.19L13.82,10.1L6.91,17L5.5,15.6M15,16V18H21V16H15Z"/>
-            </symbol>
-            <symbol id="icon-map" viewBox="0 0 24 24">
-                <path fill="currentColor" d="M15,2.1L9,5L3.06,2.06C2.5,1.78 1.83,2.15 1.78,2.77L1.62,20.06C1.6,20.5 1.95,20.89 2.38,20.97L8.85,22.06L15,19L20.94,21.94C21.5,22.22 22.17,21.85 22.22,21.23L22.38,3.94C22.4,3.5 22.05,3.11 21.62,3.03L15,2.1M14,17.2L10,19.1V6.8L14,4.9V17.2Z"/>
-            </symbol>
-        </defs>
-    </svg>
-
-    <!-- ======================================================================= -->
-    <!-- JAVASCRIPT DEPENDENCY CHECK (NoScript Fallback)                         -->
-    <!-- ======================================================================= -->
-    <noscript>
-        <div style="background: #be123c; color: #fff; padding: 20px; text-align: center; font-family: monospace; z-index: 99999; position: fixed; top: 0; width: 100%;">
-            <strong>CRITICAL ERROR:</strong> Altiguard Command requires JavaScript telemetry execution. Please enable JavaScript to access the grid.
+    <!-- ========================================================= -->
+    <!-- GLOBAL HEADER & STATUS HUD                                -->
+    <!-- ========================================================= -->
+    <header class="app-header">
+        <div class="brand">
+            <h1>ALTIGUARD</h1>
+            <p>Live GPS & Fall-Alert Telemetry</p>
         </div>
-    </noscript>
-
-    <!-- ======================================================================= -->
-    <!-- GLOBAL BRANDING & HEADER                                                -->
-    <!-- ======================================================================= -->
-    <header role="banner">
-        <h1 aria-label="Altiguard Command Kernel">ALTIGUARD COMMAND</h1>
-        <p>ENTERPRISE TELEMETRY & SPATIAL PHYSICS MATRIX</p>
+        
+        <div id="summaryBar" class="status-hud">
+            <div class="hud-item">
+                <span class="hud-label">Clearance</span>
+                <strong id="statRole" class="hud-value highlight">AWAITING...</strong>
+            </div>
+            <div class="hud-item">
+                <span class="hud-label">Active Nodes</span>
+                <strong id="statActive" class="hud-value">0 Tracked</strong>
+            </div>
+            <div class="hud-item">
+                <span class="hud-label">System Uplink</span>
+                <strong id="statStatus" class="hud-value status-secure">🟢 SECURE</strong>
+            </div>
+        </div>
     </header>
 
-    <!-- ======================================================================= -->
-    <!-- MAIN APPLICATION GRID                                                   -->
-    <!-- ======================================================================= -->
-    <main class="dashboard" role="main">
+    <!-- ========================================================= -->
+    <!-- MAIN COMMAND DASHBOARD                                    -->
+    <!-- ========================================================= -->
+    <main class="dashboard-grid">
 
-        <!-- ------------------------------------------------------------------- -->
-        <!-- MODULE 1: COMMAND UPLINK & NETWORK AUTHENTICATION                   -->
-        <!-- ------------------------------------------------------------------- -->
-        <section class="panel-network" aria-labelledby="network-heading">
-            <h2 id="network-heading">
-                <svg width="24" height="24" fill="var(--color-primary)"><use href="#icon-radar"></use></svg>
-                01. NETWORK AUTHENTICATION
-            </h2>
-            
-            <p>Establish a secure connection to the command matrix or initialize a new operational grid.</p>
-            
-            <!-- Connection Target (Injected with Buttons via script.js) -->
-            <div class="form-group">
-                <label for="groupCodeInput">Grid Access Code</label>
-                <input type="text" id="groupCodeInput" placeholder="e.g., SITE-A1B2C3" autocomplete="off" spellcheck="false" maxlength="15">
+        <!-- 1. GROUP AUTHENTICATION -->
+        <section class="panel" id="panelAuth">
+            <div class="panel-header">
+                <span class="step-badge">01</span>
+                <h2>Admin Command & Connect</h2>
             </div>
+            <p class="helper-text">Create a secure sector to become Admin, or join an active one.</p>
             
-            <hr class="divider">
+            <div class="control-row">
+                <input type="text" id="groupCodeInput" placeholder="Enter Site Code (e.g. TEAM123)" autocomplete="off">
+            </div>
+            <div class="button-split">
+                <button id="createGroupBtn" class="btn btn-primary">👑 Create as Admin</button>
+                <button id="joinGroupActionBtn" class="btn btn-outline">👷 Join as Worker</button>
+            </div>
+        </section>
 
-            <!-- Node Identity Injection -->
-            <h3>Operator Uplink Profile</h3>
-            <p>Configure local identity before transmitting coordinates to the matrix.</p>
+        <!-- 2. TELEMETRY INJECTION (AUTO-GPS & MANUAL) -->
+        <section class="panel" id="panelInput">
+            <div class="panel-header">
+                <span class="step-badge">02</span>
+                <h2>Node Identity & Sensor Link</h2>
+            </div>
+            <p class="helper-text">Input operator details to begin broadcasting coordinates.</p>
             
-            <form id="addForm" class="add-form" onsubmit="return false;">
-                
-                <div class="form-group">
+            <form id="addForm" onsubmit="return false;">
+                <div class="input-group">
                     <label for="nameInput">Operator Designation</label>
-                    <input type="text" id="nameInput" placeholder="e.g. John Doe (Structural Engineer)" required autocomplete="off">
+                    <input type="text" id="nameInput" placeholder="e.g. Aarav (Site Engineer)" required autocomplete="off">
                 </div>
 
-                <div class="form-group">
-                    <label for="workerPhoneInput">Emergency Contact Routing (Optional)</label>
-                    <input type="tel" id="workerPhoneInput" placeholder="+1 (555) 000-0000" autocomplete="off">
-                </div>
-
-                <!-- Manual Spatial Override (For areas without GPS/Baro) -->
-                <div id="manualFields" class="manual-entry-box">
-                    <label>Manual Telemetry Bypass</label>
-                    <input type="number" id="manualHeight" step="0.1" placeholder="Static Elevation (Z-Axis in meters)">
-                    
-                    <div class="coord-split">
-                        <input type="number" id="manualLat" step="0.000001" placeholder="Latitude (X-Axis)">
-                        <input type="number" id="manualLon" step="0.000001" placeholder="Longitude (Y-Axis)">
-                    </div>
-                </div>
-
-                <div class="action-row">
-                    <button type="submit" id="addBtn" class="submit-btn" disabled>
-                        <svg width="18" height="18" fill="currentColor"><use href="#icon-terminal"></use></svg>
-                        Initialize Local Node
+                <div class="sensor-controls">
+                    <button type="button" id="captureBtn" class="btn btn-sensor">
+                        📍 Auto-Fetch GPS & Altitude
+                    </button>
+                    <button type="button" id="manualToggle" class="btn btn-text">
+                        ⚙️ Toggle Manual Entry
                     </button>
                 </div>
+
+                <!-- Hidden by default, reveals if auto-GPS fails -->
+                <div id="manualFields" class="manual-override" hidden>
+                    <label>Manual Sensor Override</label>
+                    <input type="number" id="manualHeight" step="0.1" placeholder="Elevation (m)">
+                </div>
+
+                <button type="submit" id="addBtn" class="btn btn-submit" disabled>+ Inject into Grid</button>
             </form>
         </section>
 
-        <!-- ------------------------------------------------------------------- -->
-        <!-- MODULE 2: PHYSICS PROTOCOLS & ALERTS                                -->
-        <!-- ------------------------------------------------------------------- -->
-        <section class="panel-config" aria-labelledby="physics-heading">
-            <h2 id="physics-heading">
-                <svg width="24" height="24" fill="var(--color-primary)"><use href="#icon-shield"></use></svg>
-                02. PHYSICS & KINEMATICS
-            </h2>
-            
-            <p>Configure global structural baselines and acceptable kinematic deviation limits.</p>
-
-            <div class="form-group">
-                <label for="referenceInput">Structural Baseline (Datum Zero)</label>
-                <div class="flex-row" style="display: flex; gap: 10px;">
-                    <input type="number" id="referenceInput" step="0.1" value="0" aria-label="Reference Elevation">
-                    <button id="setRefBtn" class="primary-btn" style="flex: 0 0 120px;">CALIBRATE</button>
-                </div>
+        <!-- 3. LIVE MAP (LEAFLET ENGINE) -->
+        <section class="panel panel-large" id="panelMap">
+            <div class="panel-header">
+                <span class="step-badge">03</span>
+                <h2>Geographic Topography</h2>
             </div>
+            <p class="helper-text">Live auto-updating coordinates of all active personnel.</p>
+            
+            <div class="map-container">
+                <div id="map" aria-label="Interactive Live Map"></div>
+            </div>
+        </section>
 
-            <div class="coord-split">
-                <div class="form-group" style="flex: 1;">
-                    <label for="floorInput">Floor Modulus (m)</label>
-                    <input type="number" id="floorInput" step="0.1" value="3.5">
+        <!-- 4. ACTIVE ROSTER (ADMIN CONTROLS) -->
+        <section class="panel panel-large" id="panelRoster">
+            <div class="panel-header">
+                <span class="step-badge">04</span>
+                <h2>Active Personnel Grid</h2>
+            </div>
+            <p class="helper-text">Live Z-Axis monitoring. Admins can halt tracking or remove nodes.</p>
+            
+            <div id="emptyHint" class="empty-state">
+                <div class="spinner"></div>
+                <p>Awaiting hardware uplink...</p>
+            </div>
+            
+            <ul id="rosterList" class="roster-list">
+                <!-- Javascript will dynamically inject users here -->
+            </ul>
+        </section>
+
+        <!-- 5. SPATIAL PHYSICS GRAPH -->
+        <section class="panel panel-large" id="panelGraph">
+            <div class="panel-header">
+                <span class="step-badge">05</span>
+                <h2>Spatial Elevation Matrix</h2>
+            </div>
+            <p class="helper-text">Visual vertical distribution against Datum Zero.</p>
+            
+            <div class="svg-container">
+                <svg id="graphSvg" preserveAspectRatio="xMidYMid meet"></svg>
+            </div>
+        </section>
+
+        <!-- 6. ADMIN CONFIGURATION & CALIBRATION -->
+        <section class="panel" id="panelConfig">
+            <div class="panel-header">
+                <span class="step-badge">06</span>
+                <h2>Physics Calibration</h2>
+            </div>
+            
+            <div class="config-grid">
+                <div class="input-group">
+                    <label>Structural Datum (Zero Point)</label>
+                    <div class="flex-row">
+                        <input type="number" id="referenceInput" step="0.1" value="0">
+                        <button id="setRefBtn" class="btn btn-outline slim">Set Zero</button>
+                    </div>
                 </div>
-                <div class="form-group" style="flex: 1;">
-                    <label for="limitInput">Ceiling/Floor Limits (±m)</label>
+
+                <div class="input-group">
+                    <label>Safe Ceiling/Floor (± m)</label>
                     <input type="number" id="limitInput" step="0.5" value="2.0">
                 </div>
-            </div>
 
-            <div class="coord-split">
-                <div class="form-group" style="flex: 1;">
-                    <label for="dropInput">Drop Threshold (m)</label>
+                <div class="input-group">
+                    <label>Kinematic Drop Limit (m)</label>
                     <input type="number" id="dropInput" step="0.1" value="1.5">
                 </div>
-                <div class="form-group" style="flex: 1;">
-                    <label for="windowInput">Kinematic Window (s)</label>
-                    <input type="number" id="windowInput" step="1" value="4">
-                </div>
             </div>
 
-            <hr class="divider">
+            <button id="testAlertBtn" class="btn btn-warning full-width mt-10">⚠️ Test Siren</button>
+        </section>
 
-            <div class="form-group">
-                <label for="ntfyTopicInput">Ntfy.sh Outbound Hook Topic (Optional)</label>
-                <input type="text" id="ntfyTopicInput" placeholder="e.g. secure_site_evac_99" autocomplete="off">
+        <!-- 7. ALERT CONSOLE -->
+        <section class="panel" id="panelLogs">
+            <div class="panel-header">
+                <span class="step-badge">07</span>
+                <h2>Command Incident Ledger</h2>
             </div>
-
-            <button id="testAlertBtn" class="warning-btn" style="width: 100%; margin-top: 10px;">
-                ⚠️ INITIATE SIREN DIAGNOSTIC
-            </button>
-        </section>
-
-        <!-- ------------------------------------------------------------------- -->
-        <!-- MODULE 3: ACTIVE NODE ROSTER (Full Width)                           -->
-        <!-- ------------------------------------------------------------------- -->
-        <section class="panel-roster full-width" aria-labelledby="roster-heading">
-            <h2 id="roster-heading">
-                <svg width="24" height="24" fill="var(--color-primary)"><use href="#icon-satellite"></use></svg>
-                03. ACTIVE PERSONNEL GRID
-            </h2>
-            
-            <p>Live tracking array. Authorized command members may trace, promote, or disconnect hardware nodes.</p>
-
-            <div id="emptyHint" class="empty-state">
-                AWAITING HARDWARE UPLINK...
-                <br><br>
-                <span style="font-size: 0.8rem; color: var(--text-low-emphasis);">
-                    No operators currently detected within the operational matrix.
-                </span>
-            </div>
-            
-            <!-- Dynamically populated by script.js -->
-            <ul id="rosterList" aria-live="polite"></ul>
-        </section>
-
-        <!-- ------------------------------------------------------------------- -->
-        <!-- MODULE 4: SPATIAL PHYSICS GRAPH (Full Width)                        -->
-        <!-- ------------------------------------------------------------------- -->
-        <section class="panel-analytics full-width" aria-labelledby="graph-heading">
-            <h2 id="graph-heading">
-                <svg width="24" height="24" fill="var(--color-primary)"><use href="#icon-radar"></use></svg>
-                04. SPATIAL ELEVATION MATRIX
-            </h2>
-            
-            <p>Real-time vertical distribution algorithm against Datum Zero and calculated floor modulus.</p>
-
-            <div class="graph-container">
-                <!-- SVG dynamically plotted by math engine in script.js -->
-                <svg id="graphSvg" preserveAspectRatio="xMidYMid meet" aria-label="Live Elevation Graph"></svg>
-            </div>
-        </section>
-
-        <!-- ------------------------------------------------------------------- -->
-        <!-- MODULE 5: GEOGRAPHIC TOPOGRAPHY (Full Width)                        -->
-        <!-- ------------------------------------------------------------------- -->
-        <section class="panel-map full-width" aria-labelledby="map-heading">
-            <h2 id="map-heading">
-                <svg width="24" height="24" fill="var(--color-primary)"><use href="#icon-map"></use></svg>
-                05. GEOGRAPHIC POSITIONING & GEOFENCING
-            </h2>
-            
-            <p>Global GPS telemetry. Admins: Right-click topology to paint Danger Zones.</p>
-
-            <!-- WebGL / Leaflet Container -->
-            <div id="map" aria-label="Interactive Site Map"></div>
-        </section>
-
-        <!-- ------------------------------------------------------------------- -->
-        <!-- MODULE 6: SYSTEM COMPLIANCE LEDGER (Full Width)                     -->
-        <!-- ------------------------------------------------------------------- -->
-        <section class="panel-logs full-width" aria-labelledby="logs-heading">
-            <h2 id="logs-heading">
-                <svg width="24" height="24" fill="var(--color-primary)"><use href="#icon-terminal"></use></svg>
-                06. SYSTEM COMPLIANCE LEDGER
-            </h2>
-            
-            <p>Immutable chronological event log synchronized with command server.</p>
-
-            <!-- Dynamically populated by script.js -->
-            <ul id="logList" aria-live="polite"></ul>
+            <ul id="logList" class="console-logs"></ul>
         </section>
 
     </main>
 
-    <!-- ======================================================================= -->
-    <!-- JAVASCRIPT ENGINE IMPORTS                                               -->
-    <!-- ======================================================================= -->
+    <!-- ========================================================= -->
+    <!-- FLOATING ACTION BUTTONS (SOS & AI)                        -->
+    <!-- ========================================================= -->
+    <div class="fab-container">
+        <button id="aiAdvisorBtn" class="fab-btn fab-ai">✨ AI Audit</button>
+        <button id="sosTriggerBtn" class="fab-btn fab-sos">🚨 INITIATE SOS</button>
+    </div>
+
+    <!-- Modals & Overlays -->
+    <div id="aiModal" class="modal-card" hidden></div>
+    <div id="alertBanner" class="toast-banner" hidden></div>
     
-    <!-- Socket.IO Engine (Loaded dynamically from the Node.js server) -->
+    <div id="devCredit" class="watermark">COETA ALTIGUARD // ENGINEERED BY VAIBHAV RAJU KONDANE</div>
+
+    <!-- ========================================================= -->
+    <!-- EXTERNAL LIBRARIES & ENGINE CORE                          -->
+    <!-- ========================================================= -->
     <script src="/socket.io/socket.io.js"></script>
-    
-    <!-- Leaflet mapping logic (Unpkg CDN) -->
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
-    
-    <!-- Master Enterprise Altiguard Client Engine -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
     <script src="script.js"></script>
 
 </body>
