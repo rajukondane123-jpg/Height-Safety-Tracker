@@ -1,7 +1,6 @@
 /**
  * ============================================================================
  * ALTIGUARD KERNEL - ENTERPRISE CLIENT ENGINE (SCRIPT.JS)
- * Features: Barometer Fusion, Overpass Hospitals, Web Audio Sirens, Floor Graph
  * ============================================================================
  */
 
@@ -9,7 +8,7 @@
     "use strict";
 
     // ========================================================================
-    // 1. UTILITY & API ENGINE
+    // 1. UTILITY ENGINE
     // ========================================================================
     const Utils = {
         escapeHtml: (str) => {
@@ -24,23 +23,6 @@
         }
     };
 
-    async function fetchWithTimeout(resource, options = {}) {
-        const { timeout = 8000 } = options;
-        const controller = new AbortController();
-        const id = setTimeout(() => controller.abort(), timeout);
-        try {
-            const response = await fetch(resource, { ...options, signal: controller.signal });
-            clearTimeout(id);
-            return response;
-        } catch (err) {
-            clearTimeout(id);
-            throw err;
-        }
-    }
-
-    // ========================================================================
-    // 2. SYSTEM STATE, MEMORY & HARDWARE SENSORS
-    // ========================================================================
     const socket = io();
     
     const STATE = {
@@ -55,13 +37,9 @@
         kinematicHistory: [],
         mapInstance: null,
         mapMarkers: {},
-        hospitalLayer: null,
-        hospitalTimeout: null,
         pendingLocation: null,
         isManualMode: false,
-        baroSensor: null,
-        baroBaseline: null,
-        audioCtx: null
+        audioCtx: null // Used for the Siren
     };
 
     const CONFIG = {
@@ -69,7 +47,6 @@
         DEFAULT_LIMIT: 2.0,
         DEFAULT_DROP: 1.5,
         DEFAULT_WINDOW: 4,
-        DEFAULT_FLOOR: 3.5,
         DEFAULT_NTFY: ""
     };
 
@@ -89,75 +66,76 @@
     };
 
     // ========================================================================
-    // 3. HARDWARE & HAPTICS ENGINE (AUDIO & BAROMETER)
+    // 2. HARDWARE SIREN & HAPTICS ENGINE (Fixed for Autoplay)
     // ========================================================================
     function unlockAudio() {
-        try {
-            STATE.audioCtx = STATE.audioCtx || new (window.AudioContext || window.webkitAudioContext)();
-            if (STATE.audioCtx.state === "suspended") STATE.audioCtx.resume();
-        } catch (e) {}
+        if (!STATE.audioCtx) {
+            const AudioContext = window.AudioContext || window.webkitAudioContext;
+            if (AudioContext) STATE.audioCtx = new AudioContext();
+        }
+        if (STATE.audioCtx && STATE.audioCtx.state === "suspended") {
+            STATE.audioCtx.resume();
+        }
     }
 
     function triggerSiren() {
-        if (navigator.vibrate) try { navigator.vibrate([200, 100, 200, 100, 400]); } catch (e) {}
+        // 1. Force Device Vibration
+        if (navigator.vibrate) {
+            try { navigator.vibrate([300, 150, 300, 150, 500]); } catch (e) {}
+        }
+        
+        // 2. Force Audio Context Unlock
+        unlockAudio();
         if (!STATE.audioCtx) return;
+        
         try {
-            const pattern = [[880, 0.15], [0, 0.05], [660, 0.15], [0, 0.05], [880, 0.28]];
+            // High-pitched SOS alternating tone pattern
+            const pattern = [[880, 0.2], [0, 0.05], [660, 0.2], [0, 0.05], [880, 0.3]];
             let t = STATE.audioCtx.currentTime;
+            
             pattern.forEach(([freq, dur]) => {
                 if (freq > 0) {
                     const osc = STATE.audioCtx.createOscillator();
                     const gain = STATE.audioCtx.createGain();
-                    osc.type = "square"; osc.frequency.value = freq;
-                    gain.gain.setValueAtTime(0.0001, t);
-                    gain.gain.exponentialRampToValueAtTime(0.28, t + 0.02);
-                    gain.gain.exponentialRampToValueAtTime(0.0001, t + dur);
-                    osc.connect(gain).connect(STATE.audioCtx.destination);
-                    osc.start(t); osc.stop(t + dur + 0.02);
+                    osc.type = "square"; 
+                    osc.frequency.value = freq;
+                    
+                    gain.gain.setValueAtTime(0, t);
+                    gain.gain.linearRampToValueAtTime(0.3, t + 0.02); // Louder volume
+                    gain.gain.linearRampToValueAtTime(0, t + dur);
+                    
+                    osc.connect(gain);
+                    gain.connect(STATE.audioCtx.destination);
+                    
+                    osc.start(t); 
+                    osc.stop(t + dur + 0.05);
                 }
                 t += dur;
             });
-        } catch (e) {}
+        } catch (e) { console.error("Audio API Error:", e); }
     }
 
-    async function initBarometer() {
-        if (!("Barometer" in window)) return console.warn("Barometer unsupported.");
-        try {
-            if (navigator.permissions) {
-                const status = await navigator.permissions.query({ name: "barometer" });
-                if (status.state === "denied") return;
-            }
-            STATE.baroSensor = new Barometer({ frequency: 1 });
-            STATE.baroSensor.addEventListener("reading", () => {
-                if (STATE.baroBaseline === null) STATE.baroBaseline = STATE.baroSensor.pressure;
-            });
-            STATE.baroSensor.addEventListener("error", () => { STATE.baroSensor = null; });
-            STATE.baroSensor.start();
-        } catch (e) {}
-    }
-
-    function currentBaroDelta() {
-        if (STATE.baroSensor && STATE.baroBaseline !== null && typeof STATE.baroSensor.pressure === "number") {
-            return 44330 * (1 - Math.pow(STATE.baroSensor.pressure / STATE.baroBaseline, 1 / 5.255));
-        }
-        return null;
-    }
 
     // ========================================================================
-    // 4. CORE SOCKET.IO NETWORK LISTENERS
+    // 3. CORE SOCKET.IO NETWORK LISTENERS
     // ========================================================================
     socket.on('roleAssigned', (data) => {
-        STATE.role = data.role; STATE.groupCode = data.groupCode;
+        STATE.role = data.role; 
+        STATE.groupCode = data.groupCode;
+        
         DOM.statRole.textContent = STATE.role.toUpperCase();
         document.getElementById("groupCodeInput").value = STATE.groupCode;
         
         const isPrivileged = (STATE.role === 'admin' || STATE.role === 'creator');
+        
         DOM.ntfyTopicInput.disabled = !isPrivileged;
-        DOM.ntfyTopicInput.placeholder = isPrivileged ? "Enter Ntfy Topic (e.g. altiguard-site)" : "Locked: Admin Clearance Required";
-        ["referenceInput", "setRefBtn", "limitInput", "dropInput", "windowInput"].forEach(id => {
-            const el = document.getElementById(id);
-            if(el) el.disabled = !isPrivileged;
-        });
+        DOM.ntfyTopicInput.placeholder = isPrivileged ? "Enter Ntfy Topic (e.g. altiguard-site-99)" : "Locked: Admin Clearance Required";
+        
+        document.getElementById("referenceInput").disabled = !isPrivileged;
+        document.getElementById("setRefBtn").disabled = !isPrivileged;
+        document.getElementById("limitInput").disabled = !isPrivileged;
+        document.getElementById("dropInput").disabled = !isPrivileged;
+        document.getElementById("windowInput").disabled = !isPrivileged;
 
         showAlert(`Uplink Established: Connected to ${STATE.groupCode} as ${STATE.role.toUpperCase()}`);
         renderUI();
@@ -180,34 +158,44 @@
     });
 
     // ========================================================================
-    // 5. REDUNDANT NOTIFICATION ENGINE (NTFY + BROWSER PUSH)
+    // 4. NTFY.SH PUSH NOTIFICATION ENGINE (Patched for Error Handling)
     // ========================================================================
     function transmitNtfyAlert(title, message, tags, lat, lon) {
-        if (window.Notification && Notification.permission === "granted") {
-            new Notification(title, { body: message });
-        } else if (window.Notification && Notification.permission !== "denied") {
-            Notification.requestPermission();
-        }
+        // 1. Silent Local Browser Push (Optional, won't break thread if blocked)
+        try { if (window.Notification && Notification.permission === "granted") new Notification(title, { body: message }); } catch(e) {}
 
+        // 2. Fetch the Active Topic
         const topic = DOM.ntfyTopicInput.value.trim() || localSettings.ntfyTopic;
-        if (!topic) return; 
-        const cleanTopic = topic.replace(/[^a-zA-Z0-9-_]/g, "");
+        if (!topic) {
+            showAlert("⚠️ Ntfy Alert Skipped: No Secret Channel Topic configured.");
+            return; 
+        }
         
-        const headers = { 'Title': title, 'Priority': 'urgent', 'Tags': tags };
+        const cleanTopic = topic.replace(/[^a-zA-Z0-9-_]/g, "");
+        const headers = { 'Title': String(title), 'Priority': 'urgent', 'Tags': String(tags) };
         if (lat && lon) headers['Click'] = `https://www.google.com/maps?q=${lat},${lon}`;
 
-        fetchWithTimeout(`https://ntfy.sh/${cleanTopic}`, { method: 'POST', body: message, headers: headers, timeout: 5000 })
-            .catch(err => console.warn("[REST_ERR] Ntfy Push Failed.", err));
+        // 3. Network Fetch to Ntfy Servers
+        fetch(`https://ntfy.sh/${cleanTopic}`, { method: 'POST', body: String(message), headers: headers })
+            .then(res => {
+                if (!res.ok) showAlert(`❌ Ntfy Server Error: ${res.status}`);
+                else console.log("✅ Ntfy push successful.");
+            })
+            .catch(err => {
+                console.warn("[REST_ERR] Ntfy Push Failed.", err);
+                showAlert("❌ Ntfy Push Failed (Check Adblocker/Network)");
+            });
     }
 
+
     // ========================================================================
-    // 6. METEOROLOGY & REVERSE GEOCODING
+    // 5. METEOROLOGY & GEOCODING
     // ========================================================================
     async function fetchWeatherAndAQI(lat, lon) {
         try {
-            const weatherRes = await fetchWithTimeout(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current_weather=true`);
+            const weatherRes = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current_weather=true`);
             const weatherData = await weatherRes.json();
-            const aqiRes = await fetchWithTimeout(`https://air-quality-api.open-meteo.com/v1/air-quality?latitude=${lat}&longitude=${lon}&current=european_aqi`);
+            const aqiRes = await fetch(`https://air-quality-api.open-meteo.com/v1/air-quality?latitude=${lat}&longitude=${lon}&current=european_aqi`);
             const aqiData = await aqiRes.json();
 
             const temp = weatherData.current_weather.temperature;
@@ -227,52 +215,24 @@
 
             const iconBox = document.getElementById("weatherIconBox");
             const conditionEl = document.getElementById("wCondition");
+            
             if (code === 0 || code === 1) { conditionEl.innerText = "Clear & Sunny"; iconBox.innerHTML = `<div class="anim-sun"></div>`; } 
             else if (code >= 51 && code <= 67) { conditionEl.innerText = "Rain Precipitation"; iconBox.innerHTML = `<div class="anim-cloud anim-rain"></div>`; } 
             else { conditionEl.innerText = "Cloudy / Overcast"; iconBox.innerHTML = `<div class="anim-cloud"></div>`; }
-
-            // Map HUD Update
-            const mapHudTemp = document.getElementById("hudTemp");
-            const mapHudWind = document.getElementById("hudWind");
-            if(mapHudTemp) mapHudTemp.innerHTML = `${temp}&deg;C`;
-            if(mapHudWind) mapHudWind.innerHTML = `${wind} km/h`;
-
         } catch (e) { console.error("Weather fetch failed", e); }
     }
 
     async function fetchAddress(lat, lon) {
         try {
-            const res = await fetchWithTimeout(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lon}`);
+            const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lon}`);
             const data = await res.json();
             if (data && data.address) { const addr = data.address; return `${addr.road || addr.suburb || ''}, ${addr.city || addr.town || addr.county || ''} - ${addr.postcode || ''}`; }
             return "Coordinates locked. Address unavailable.";
         } catch(e) { return "Coordinates locked. Address unavailable."; }
     }
 
-    function fetchHospitals() {
-        if (!STATE.mapInstance || STATE.mapInstance.getZoom() < 11 || typeof L === "undefined") return; 
-        const bounds = STATE.mapInstance.getBounds();
-        const query = `[out:json][timeout:10];node["amenity"="hospital"](${bounds.getSouth()},${bounds.getWest()},${bounds.getNorth()},${bounds.getEast()});out;`;
-        
-        fetchWithTimeout(`https://overpass-api.de/api/interpreter?data=${encodeURIComponent(query)}`, { timeout: 8000 })
-            .then(res => res.json())
-            .then(data => {
-                STATE.hospitalLayer.clearLayers(); 
-                if (data && data.elements) {
-                    data.elements.forEach(item => {
-                        if (item.lat && item.lon) {
-                            const name = (item.tags && item.tags.name) ? item.tags.name : "Emergency Hospital";
-                            const icon = L.divIcon({ className: '', html: `<div style="background: #0a0f1c; border: 2px solid #ef4444; border-radius: 50%; width: 25px; height: 25px; box-shadow: 0 0 10px #ef4444;"></div>`, iconSize: [25, 25] });
-                            STATE.hospitalLayer.addLayer(L.marker([item.lat, item.lon], { icon: icon }).bindPopup(`<b>🚑 ${Utils.escapeHtml(name)}</b>`));
-                        }
-                    });
-                }
-            }).catch(err => console.warn("Hospitals skipped."));
-    }
-
-
     // ========================================================================
-    // 7. DOM INTERACTIONS & KINEMATICS
+    // 6. DOM INTERACTIONS (INJECTION & CONFIG)
     // ========================================================================
     document.getElementById("createGroupBtn").addEventListener("click", () => { socket.emit('createGroup', document.getElementById("groupCodeInput").value); });
     document.getElementById("joinGroupActionBtn").addEventListener("click", () => {
@@ -282,7 +242,7 @@
     });
 
     document.getElementById("setRefBtn").addEventListener("click", () => {
-        if (STATE.role !== 'admin' && STATE.role !== 'creator') return showAlert("Access Denied.");
+        if (STATE.role !== 'admin' && STATE.role !== 'creator') return showAlert("Access Denied: Only Admins can set Datum Zero.");
         const val = parseFloat(document.getElementById("referenceInput").value) || 0;
         STATE.globalBaseline = val; socket.emit('setBaseline', val); renderUI(); showAlert(`Datum Zero calibrated to ${val}m`); logEvent(`System Datum re-calibrated to ${val}m`);
     });
@@ -295,21 +255,17 @@
     });
 
     document.getElementById("captureBtn").addEventListener("click", () => {
-        unlockAudio();
         DOM.gpsReadout.hidden = false;
         DOM.gpsReadout.innerHTML = `<div class="spinner" style="width:15px;height:15px;display:inline-block;vertical-align:middle;margin-right:10px;"></div> Acquiring Satellite Lock...`;
 
         navigator.geolocation.getCurrentPosition(async (pos) => {
-            const lat = pos.coords.latitude; const lon = pos.coords.longitude; 
-            const alt = pos.coords.altitude || 0;
-            const baroDelta = currentBaroDelta();
-            const finalAlt = baroDelta !== null ? alt + baroDelta : alt; // Sensor Fusion
-
+            const lat = pos.coords.latitude; const lon = pos.coords.longitude; const alt = pos.coords.altitude || 0;
             DOM.gpsReadout.innerHTML = `Fetching precise address & climate data...`;
+            
             const [address] = await Promise.all([ fetchAddress(lat, lon), fetchWeatherAndAQI(lat, lon) ]);
-            STATE.pendingLocation = { lat, lon, height: finalAlt };
+            STATE.pendingLocation = { lat, lon, height: alt };
 
-            DOM.gpsReadout.innerHTML = `<strong style="color:var(--brand-primary);">📍 Lock Acquired ${baroDelta !== null ? '(Baro Fused)' : ''}</strong><br><span style="font-family:monospace; color:#ccc;">Coord: ${lat.toFixed(5)}, ${lon.toFixed(5)}</span><br><span style="font-size:0.8rem; color:var(--text-muted);">${address}</span>`;
+            DOM.gpsReadout.innerHTML = `<strong style="color:var(--brand-primary);">📍 Lock Acquired</strong><br><span style="font-family:monospace; color:#ccc;">Coord: ${lat.toFixed(5)}, ${lon.toFixed(5)}</span><br><span style="font-size:0.8rem; color:var(--text-muted);">${address}</span>`;
             document.getElementById("addBtn").disabled = false; STATE.isManualMode = false; DOM.manualFields.hidden = true;
         }, (err) => { DOM.gpsReadout.innerHTML = `<span style="color:var(--accent-danger);">❌ GPS Error: ${err.message}</span>`; }, { enableHighAccuracy: true });
     });
@@ -321,20 +277,25 @@
         const name = document.getElementById("nameInput").value.trim();
         const designation = document.getElementById("designationInput").value.trim();
         if (!name || !designation) return;
+
         if (!STATE.mySelfId) STATE.mySelfId = "OP-" + Math.random().toString(36).slice(2, 10).toUpperCase();
         
         let pLat = null, pLon = null, pHeight = 0;
+
         if (STATE.isManualMode) {
             pHeight = parseFloat(document.getElementById("manualHeight").value) || 0;
             pLat = parseFloat(document.getElementById("manualLat").value) || null;
             pLon = parseFloat(document.getElementById("manualLon").value) || null;
-            if (pLat !== null && pLon !== null) { fetchWeatherAndAQI(pLat, pLon); if (STATE.mapInstance) STATE.mapInstance.flyTo([pLat, pLon], 16); }
+            if (pLat !== null && pLon !== null) {
+                fetchWeatherAndAQI(pLat, pLon);
+                if (STATE.mapInstance) STATE.mapInstance.flyTo([pLat, pLon], 16);
+            }
         } else if (STATE.pendingLocation) {
             pLat = STATE.pendingLocation.lat; pLon = STATE.pendingLocation.lon; pHeight = STATE.pendingLocation.height;
             if (STATE.mapInstance) STATE.mapInstance.flyTo([pLat, pLon], 18);
         }
 
-        const person = { id: STATE.mySelfId, name: name, designation: designation, height: pHeight, lat: pLat, lon: pLon, method: STATE.isManualMode ? "manual" : (STATE.baroSensor ? "baro+gps" : "gps") };
+        const person = { id: STATE.mySelfId, name: name, designation: designation, height: pHeight, lat: pLat, lon: pLon, method: STATE.isManualMode ? "manual" : "auto" };
 
         const existingIndex = STATE.group.findIndex(p => p.id === STATE.mySelfId);
         if (existingIndex > -1) STATE.group[existingIndex] = person;
@@ -343,10 +304,20 @@
         socket.emit('updateGroupData', STATE.group);
         if (!STATE.isManualMode) startTracking(STATE.mySelfId);
         
-        document.getElementById("nameInput").value = ""; document.getElementById("designationInput").value = "";
-        const btn = document.getElementById("addBtn"); btn.textContent = "✓ INJECTED"; btn.style.background = "var(--accent-success)"; btn.style.color = "#000";
+        document.getElementById("nameInput").value = "";
+        document.getElementById("designationInput").value = "";
+        
+        if (!STATE.isManualMode) {
+            DOM.gpsReadout.innerHTML = `<strong style="color:var(--accent-success);">✓ Sensor Link Established</strong>`;
+            setTimeout(() => { DOM.gpsReadout.hidden = true; }, 3000);
+        }
+        
+        const btn = document.getElementById("addBtn");
+        btn.textContent = "✓ INJECTED"; btn.style.background = "var(--accent-success)"; btn.style.color = "#000";
         setTimeout(() => { btn.textContent = "+ Inject into Grid"; btn.style.background = ""; btn.style.color = ""; btn.disabled = true; }, 2000);
-        renderUI(); showAlert(`✅ ${name} successfully injected.`);
+
+        renderUI();
+        showAlert(`✅ ${name} successfully injected into the matrix.`);
     });
 
     const saveSettings = () => { 
@@ -358,17 +329,34 @@
     };
     ["limitInput", "dropInput", "windowInput", "ntfyTopicInput"].forEach(id => { document.getElementById(id).addEventListener("input", saveSettings); });
 
+
+    // ========================================================================
+    // 7. EMERGENCY ACTIONS (SOS & ALERTS PATCED)
+    // ========================================================================
     document.getElementById("testAlertBtn").addEventListener("click", () => {
-        socket.emit('triggerFallAlert', { name: "System Diagnostic", drop: 1.5, id: "test" }); 
-        showAlert(`⚠️ TEST SIREN INITIATED`); logEvent("Test alert broadcasted."); triggerSiren();
+        // 1. Force Local Siren & Vibration immediately on click
+        triggerSiren(); 
+        
+        // 2. Broadcast to Server
+        const testData = { name: "System Diagnostic", drop: 1.5, id: "test" };
+        socket.emit('triggerFallAlert', testData); 
+        
+        // 3. UI Updates
+        showAlert(`⚠️ TEST SIREN INITIATED`); 
+        logEvent("Test alert broadcasted."); 
+        
+        // 4. Force Ntfy Push
         transmitNtfyAlert("⚠️ TEST SIREN", "A diagnostic test siren has been activated by Command.", "loudspeaker");
     });
 
     document.getElementById("sosTriggerBtn").addEventListener("click", () => {
-        if (!STATE.mySelfId) return showAlert("Matrix Error: Inject into the grid to use SOS.");
+        if (!STATE.mySelfId) return showAlert("Matrix Error: You must inject into the grid to use SOS.");
+        
+        // Local feedback
+        triggerSiren();
+
         const me = STATE.group.find(p => p.id === STATE.mySelfId);
         socket.emit('triggerSOS', { name: me.name, lat: me.lat, lon: me.lon, height: me.height });
-        triggerSiren();
         transmitNtfyAlert(`🚨 SOS INITIATED: ${me.name}`, `${me.name} triggered SOS panic protocol at Z: ${me.height.toFixed(2)}m.`, "sos,rotating_light", me.lat, me.lon);
     });
 
@@ -376,15 +364,14 @@
     window.removeNode = function(id) { if (STATE.liveTrackingId === id) stopTracking(); socket.emit('removePerson', id); };
 
     function startTracking(personId) {
-        if (!navigator.geolocation) return showAlert("Geolocation disabled.");
-        stopTracking(); unlockAudio(); STATE.liveTrackingId = personId; renderUI(); 
+        if (!navigator.geolocation) return showAlert("Hardware Error: Geolocation disabled.");
+        stopTracking(); STATE.liveTrackingId = personId; renderUI(); 
 
         STATE.gpsWatchId = navigator.geolocation.watchPosition((pos) => {
             const person = STATE.group.find(p => p.id === STATE.liveTrackingId);
             if (person) {
                 person.lat = pos.coords.latitude; person.lon = pos.coords.longitude;
-                const baroDelta = currentBaroDelta();
-                if (pos.coords.altitude !== null) person.height = baroDelta !== null ? pos.coords.altitude + baroDelta : pos.coords.altitude;
+                if (pos.coords.altitude !== null) person.height = pos.coords.altitude;
                 
                 checkKinematicDrop(person); socket.emit('updateGroupData', STATE.group); renderUI();
             }
@@ -409,15 +396,15 @@
             if (peak - person.height >= limit) {
                 const dropAmt = (peak - person.height).toFixed(2);
                 socket.emit('triggerFallAlert', { name: person.name, drop: dropAmt, id: person.id });
-                transmitNtfyAlert(`🚨 FALL ALERT: ${person.name}`, `${person.name} experienced a sudden drop of ${dropAmt}m.`, "rotating_light,skull", person.lat, person.lon);
-                triggerSiren();
+                triggerSiren(); // Local fallback
+                transmitNtfyAlert(`🚨 FALL ALERT: ${person.name}`, `${person.name} has experienced a sudden drop of ${dropAmt}m.`, "rotating_light,skull", person.lat, person.lon);
                 STATE.kinematicHistory = []; 
             }
         }
     }
 
     // ========================================================================
-    // 8. MASTER RENDER ENGINE (UI, FLOOR GRAPH, LEAFLET + HOSPITALS)
+    // 8. MASTER RENDER ENGINE
     // ========================================================================
     function renderUI() {
         DOM.statActive.textContent = `${STATE.group.length} Tracked`;
@@ -459,38 +446,12 @@
         const W = DOM.graphSvg.clientWidth || 1000; const H = DOM.graphSvg.clientHeight || 600; 
         const paddingLeft = 60; const paddingRight = 40; const paddingTopBottom = 60;
         const limit = parseFloat(document.getElementById("limitInput").value) || CONFIG.DEFAULT_LIMIT;
-        const floorH = CONFIG.DEFAULT_FLOOR; // Standard floor spacing
         const rels = STATE.group.map(p => p.height - STATE.globalBaseline);
         const maxAbs = Math.max(limit * 1.5, ...rels.map(Math.abs), 1);
         const plotHeight = H - (paddingTopBottom * 2);
         const scaleY = (plotHeight / 2) / maxAbs; const midY = H / 2;
 
         let svgHtml = "";
-        const usableWidth = W - paddingLeft - paddingRight;
-
-        // DRAW FLOORS BACKGROUND
-        const floorPx = floorH * scaleY;
-        const startFloor = Math.floor(-maxAbs / floorH) - 1;
-        const endFloor = Math.ceil(maxAbs / floorH) + 1;
-
-        for (let f = startFloor; f <= endFloor; f++) {
-            const yBot = midY - (f * floorH) * scaleY;
-            const yTop = yBot - floorPx;
-            const rectBot = Math.min(Math.max(yBot, paddingTopBottom), H - paddingTopBottom);
-            const rectTop = Math.max(Math.min(yTop, H - paddingTopBottom), paddingTopBottom);
-            const rectHeight = rectBot - rectTop;
-
-            if (rectHeight > 0) {
-                const fillClass = Math.abs(f) % 2 === 0 ? 'rgba(255,255,255,0.02)' : 'rgba(255,255,255,0.05)';
-                svgHtml += `<rect x="${paddingLeft}" y="${rectTop}" width="${usableWidth}" height="${rectHeight}" fill="${fillClass}"></rect>`;
-                if (rectHeight > 15) {
-                    const labelStr = f >= 0 ? `Lvl ${f}` : `Bsmnt ${Math.abs(f)}`;
-                    svgHtml += `<text x="${W - paddingRight - 10}" y="${rectTop + 16}" fill="rgba(255,255,255,0.2)" font-size="10" font-family="monospace" text-anchor="end">${labelStr}</text>`;
-                }
-            }
-        }
-
-        // Y-AXIS GRID LINES
         const step = Utils.niceStep(maxAbs);
         for (let v = step; v <= maxAbs; v += step) {
             [v, -v].forEach(val => {
@@ -506,9 +467,9 @@
         svgHtml += `<text class="axis-label" x="${paddingLeft - 10}" y="${midY + 4}" fill="#38bdf8" font-weight="bold" text-anchor="end">0m</text>`;
         svgHtml += `<text class="axis-label" x="${W - paddingRight}" y="${midY - 10}" fill="#38bdf8" text-anchor="end">DATUM ZERO</text>`;
 
-        // PLOT FIGURES
         STATE.group.forEach((p, i) => {
             const rel = p.height - STATE.globalBaseline;
+            const usableWidth = W - paddingLeft - paddingRight;
             const x = paddingLeft + (usableWidth * (i + 0.5)) / STATE.group.length;
             const y = midY - (rel * scaleY);
             const status = rel > limit ? "above" : rel < -limit ? "below" : "within";
@@ -535,21 +496,6 @@
         if (!STATE.mapInstance && typeof L !== "undefined") {
             STATE.mapInstance = L.map('map').setView([20.5937, 78.9629], 5);
             L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(STATE.mapInstance);
-            STATE.hospitalLayer = L.layerGroup().addTo(STATE.mapInstance);
-            
-            // Map Weather HUD Inject
-            const weatherControl = L.control({position: 'topright'});
-            weatherControl.onAdd = function () {
-                const div = L.DomUtil.create('div', 'weather-hud');
-                div.innerHTML = `<div style="background:rgba(0,0,0,0.7); padding:5px 10px; border-radius:4px; border:1px solid #38bdf8; font-family:monospace; color:#fff; font-size:12px;">SITE ATMOSPHERE<br><span id="hudTemp">--&deg;C</span> | <span id="hudWind">-- km/h</span></div>`;
-                return div;
-            };
-            weatherControl.addTo(STATE.mapInstance);
-
-            STATE.mapInstance.on('moveend', () => {
-                clearTimeout(STATE.hospitalTimeout);
-                STATE.hospitalTimeout = setTimeout(fetchHospitals, 1500); 
-            });
         }
         if (!STATE.mapInstance) return;
 
@@ -570,12 +516,20 @@
         });
     }
 
+    // ========================================================================
+    // 9. HELPER UTILITIES
+    // ========================================================================
     function loadSettings() { try { return JSON.parse(localStorage.getItem(CONFIG.STORAGE_KEY)) || { ...CONFIG }; } catch (e) { return { ...CONFIG }; } }
     function showAlert(msg) { DOM.alertBanner.textContent = msg; DOM.alertBanner.classList.add("show"); DOM.alertBanner.hidden = false; setTimeout(() => DOM.alertBanner.classList.remove("show"), 5000); }
     function logEvent(msg) { STATE.logs.unshift(`[${new Date().toLocaleTimeString()}] ${msg}`); if(STATE.logs.length > 30) STATE.logs.pop(); DOM.logList.innerHTML = STATE.logs.map(l => `<li class="log-item">${l}</li>`).join(""); }
 
-    initBarometer();
     if (typeof L !== "undefined") setTimeout(renderMap, 500);
+    
+    // Request Notification permission silently on load
+    if (window.Notification && Notification.permission !== "granted" && Notification.permission !== "denied") {
+        Notification.requestPermission();
+    }
+    
     document.getElementById("limitInput").value = localSettings.limit; document.getElementById("dropInput").value = localSettings.dropThreshold; document.getElementById("windowInput").value = localSettings.dropWindow; DOM.ntfyTopicInput.value = localSettings.ntfyTopic;
 
 })();
