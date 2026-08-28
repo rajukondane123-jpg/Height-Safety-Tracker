@@ -4,150 +4,103 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <meta name="theme-color" content="#0f172a">
-    <title>Altiguard | Live Structural Safety & GPS Matrix</title>
-
-    <!-- Leaflet Topographical Map CSS -->
+    <title>Altiguard | Tactical Weather & GPS Matrix</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin=""/>
-    
-    <!-- Google Fonts for crisp, user-friendly UI -->
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
-    
-    <!-- Link to our upcoming tactical CSS file -->
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
 
-    <!-- ========================================================= -->
-    <!-- GLOBAL HEADER & STATUS HUD                                -->
-    <!-- ========================================================= -->
     <header class="app-header">
         <div class="brand">
             <h1>ALTIGUARD</h1>
-            <p>Live GPS & Fall-Alert Telemetry</p>
+            <p>Live GPS, Fall-Alert & Climate Telemetry</p>
         </div>
         
         <div id="summaryBar" class="status-hud">
-            <div class="hud-item">
-                <span class="hud-label">Clearance</span>
-                <strong id="statRole" class="hud-value highlight">AWAITING...</strong>
-            </div>
-            <div class="hud-item">
-                <span class="hud-label">Active Nodes</span>
-                <strong id="statActive" class="hud-value">0 Tracked</strong>
-            </div>
-            <div class="hud-item">
-                <span class="hud-label">System Uplink</span>
-                <strong id="statStatus" class="hud-value status-secure">🟢 SECURE</strong>
-            </div>
+            <div class="hud-item"><span class="hud-label">Clearance</span><strong id="statRole" class="hud-value highlight">AWAITING...</strong></div>
+            <div class="hud-item"><span class="hud-label">Active Nodes</span><strong id="statActive" class="hud-value">0 Tracked</strong></div>
+            <div class="hud-item"><span class="hud-label">System Uplink</span><strong id="statStatus" class="hud-value status-secure">🟢 SECURE</strong></div>
         </div>
     </header>
 
-    <!-- ========================================================= -->
-    <!-- MAIN COMMAND DASHBOARD                                    -->
-    <!-- ========================================================= -->
     <main class="dashboard-grid">
 
         <!-- 1. GROUP AUTHENTICATION -->
         <section class="panel" id="panelAuth">
-            <div class="panel-header">
-                <span class="step-badge">01</span>
-                <h2>Admin Command & Connect</h2>
-            </div>
-            <p class="helper-text">Create a secure sector to become Admin, or join an active one.</p>
-            
-            <div class="control-row">
-                <input type="text" id="groupCodeInput" placeholder="Enter Site Code (e.g. TEAM123)" autocomplete="off">
-            </div>
+            <div class="panel-header"><span class="step-badge">01</span><h2>Admin Command & Connect</h2></div>
+            <div class="control-row"><input type="text" id="groupCodeInput" placeholder="Enter Site Code (e.g. TEAM123)" autocomplete="off"></div>
             <div class="button-split">
                 <button id="createGroupBtn" class="btn btn-primary">👑 Create as Admin</button>
                 <button id="joinGroupActionBtn" class="btn btn-outline">👷 Join as Worker</button>
             </div>
         </section>
 
-        <!-- 2. TELEMETRY INJECTION (AUTO-GPS & MANUAL) -->
+        <!-- 2. TELEMETRY INJECTION -->
         <section class="panel" id="panelInput">
-            <div class="panel-header">
-                <span class="step-badge">02</span>
-                <h2>Node Identity & Sensor Link</h2>
-            </div>
-            <p class="helper-text">Input operator details to begin broadcasting coordinates.</p>
-            
+            <div class="panel-header"><span class="step-badge">02</span><h2>Node Identity & Sensor Link</h2></div>
             <form id="addForm" onsubmit="return false;">
                 <div class="input-group">
-                    <label for="nameInput">Operator Designation</label>
-                    <input type="text" id="nameInput" placeholder="e.g. Aarav (Site Engineer)" required autocomplete="off">
+                    <label>Operator Name</label>
+                    <input type="text" id="nameInput" placeholder="e.g. Aarav" required autocomplete="off">
                 </div>
-
+                <div class="input-group">
+                    <label>Designation / Role</label>
+                    <input type="text" id="designationInput" placeholder="e.g. Site Engineer" required autocomplete="off">
+                </div>
                 <div class="sensor-controls">
-                    <button type="button" id="captureBtn" class="btn btn-sensor">
-                        📍 Auto-Fetch GPS & Altitude
-                    </button>
-                    <button type="button" id="manualToggle" class="btn btn-text">
-                        ⚙️ Toggle Manual Entry
-                    </button>
+                    <button type="button" id="captureBtn" class="btn btn-sensor">📍 Auto-Fetch GPS & Altitude</button>
+                    <button type="button" id="manualToggle" class="btn btn-text">⚙️ Toggle Manual Entry</button>
                 </div>
-
-                <!-- Hidden by default, reveals if auto-GPS fails -->
+                <div id="gpsReadout" class="gps-readout" hidden></div>
                 <div id="manualFields" class="manual-override" hidden>
-                    <label>Manual Sensor Override</label>
+                    <label>Manual Sensor Override (m)</label>
                     <input type="number" id="manualHeight" step="0.1" placeholder="Elevation (m)">
                 </div>
-
                 <button type="submit" id="addBtn" class="btn btn-submit" disabled>+ Inject into Grid</button>
             </form>
         </section>
 
-        <!-- 3. LIVE MAP (LEAFLET ENGINE) -->
-        <section class="panel panel-large" id="panelMap">
-            <div class="panel-header">
-                <span class="step-badge">03</span>
-                <h2>Geographic Topography</h2>
-            </div>
-            <p class="helper-text">Live auto-updating coordinates of all active personnel.</p>
-            
-            <div class="map-container">
-                <div id="map" aria-label="Interactive Live Map"></div>
+        <!-- 3. NEW: LIVE METEOROLOGICAL DATA -->
+        <section class="panel panel-large" id="panelWeather">
+            <div class="panel-header"><span class="step-badge">03</span><h2>Live Atmospheric Telemetry</h2></div>
+            <div id="weatherWidget" class="weather-grid">
+                <!-- Weather Animations -->
+                <div class="weather-animation-box" id="weatherIconBox">
+                    <div class="weather-icon-placeholder">Awaiting GPS Lock...</div>
+                </div>
+                <!-- Weather Data -->
+                <div class="weather-data-box">
+                    <div class="w-stat"><span class="w-label">Temperature</span><strong id="wTemp">--°C</strong></div>
+                    <div class="w-stat"><span class="w-label">Wind Speed</span><strong id="wWind">-- km/h</strong></div>
+                    <div class="w-stat"><span class="w-label">Air Quality (AQI)</span><strong id="wAqi" class="aqi-badge">--</strong></div>
+                    <div class="w-stat"><span class="w-label">Condition</span><strong id="wCondition" style="color:var(--brand-primary);">--</strong></div>
+                </div>
             </div>
         </section>
 
-        <!-- 4. ACTIVE ROSTER (ADMIN CONTROLS) -->
+        <!-- 4. ACTIVE ROSTER -->
         <section class="panel panel-large" id="panelRoster">
-            <div class="panel-header">
-                <span class="step-badge">04</span>
-                <h2>Active Personnel Grid</h2>
-            </div>
-            <p class="helper-text">Live Z-Axis monitoring. Admins can halt tracking or remove nodes.</p>
-            
-            <div id="emptyHint" class="empty-state">
-                <div class="spinner"></div>
-                <p>Awaiting hardware uplink...</p>
-            </div>
-            
-            <ul id="rosterList" class="roster-list">
-                <!-- Javascript will dynamically inject users here -->
-            </ul>
+            <div class="panel-header"><span class="step-badge">04</span><h2>Active Personnel Grid</h2></div>
+            <div id="emptyHint" class="empty-state"><div class="spinner"></div><p>Awaiting hardware uplink...</p></div>
+            <ul id="rosterList" class="roster-list"></ul>
         </section>
 
-        <!-- 5. SPATIAL PHYSICS GRAPH -->
-        <section class="panel panel-large" id="panelGraph">
-            <div class="panel-header">
-                <span class="step-badge">05</span>
-                <h2>Spatial Elevation Matrix</h2>
-            </div>
-            <p class="helper-text">Visual vertical distribution against Datum Zero.</p>
-            
-            <div class="svg-container">
-                <svg id="graphSvg" preserveAspectRatio="xMidYMid meet"></svg>
-            </div>
+        <!-- 5. MASSIVE MAP WINDOW -->
+        <section class="panel panel-hero" id="panelMap">
+            <div class="panel-header"><span class="step-badge">05</span><h2>Geographic Topography</h2></div>
+            <div class="map-container-hero"><div id="map"></div></div>
         </section>
 
-        <!-- 6. ADMIN CONFIGURATION & CALIBRATION -->
+        <!-- 6. MASSIVE GRAPH WINDOW -->
+        <section class="panel panel-hero" id="panelGraph">
+            <div class="panel-header"><span class="step-badge">06</span><h2>Spatial Elevation Matrix</h2></div>
+            <div class="svg-container-hero"><svg id="graphSvg" preserveAspectRatio="xMidYMid meet"></svg></div>
+        </section>
+
+        <!-- 7. ADMIN CONFIGURATION -->
         <section class="panel" id="panelConfig">
-            <div class="panel-header">
-                <span class="step-badge">06</span>
-                <h2>Physics Calibration</h2>
-            </div>
-            
+            <div class="panel-header"><span class="step-badge">07</span><h2>Physics Calibration</h2></div>
             <div class="config-grid">
                 <div class="input-group">
                     <label>Structural Datum (Zero Point)</label>
@@ -156,49 +109,28 @@
                         <button id="setRefBtn" class="btn btn-outline slim">Set Zero</button>
                     </div>
                 </div>
-
-                <div class="input-group">
-                    <label>Safe Ceiling/Floor (± m)</label>
-                    <input type="number" id="limitInput" step="0.5" value="2.0">
-                </div>
-
-                <div class="input-group">
-                    <label>Kinematic Drop Limit (m)</label>
-                    <input type="number" id="dropInput" step="0.1" value="1.5">
-                </div>
+                <div class="input-group"><label>Safe Ceiling/Floor (± m)</label><input type="number" id="limitInput" step="0.5" value="2.0"></div>
+                <div class="input-group"><label>Kinematic Drop Limit (m)</label><input type="number" id="dropInput" step="0.1" value="1.5"></div>
             </div>
-
-            <button id="testAlertBtn" class="btn btn-warning full-width mt-10">⚠️ Test Siren</button>
         </section>
 
-        <!-- 7. ALERT CONSOLE -->
+        <!-- 8. ALERT CONSOLE -->
         <section class="panel" id="panelLogs">
-            <div class="panel-header">
-                <span class="step-badge">07</span>
-                <h2>Command Incident Ledger</h2>
-            </div>
+            <div class="panel-header"><span class="step-badge">08</span><h2>Command Incident Ledger</h2></div>
             <ul id="logList" class="console-logs"></ul>
         </section>
 
     </main>
 
-    <!-- ========================================================= -->
-    <!-- FLOATING ACTION BUTTONS (SOS & AI)                        -->
-    <!-- ========================================================= -->
     <div class="fab-container">
         <button id="aiAdvisorBtn" class="fab-btn fab-ai">✨ AI Audit</button>
         <button id="sosTriggerBtn" class="fab-btn fab-sos">🚨 INITIATE SOS</button>
     </div>
 
-    <!-- Modals & Overlays -->
     <div id="aiModal" class="modal-card" hidden></div>
     <div id="alertBanner" class="toast-banner" hidden></div>
-    
     <div id="devCredit" class="watermark">COETA ALTIGUARD // ENGINEERED BY VAIBHAV RAJU KONDANE</div>
 
-    <!-- ========================================================= -->
-    <!-- EXTERNAL LIBRARIES & ENGINE CORE                          -->
-    <!-- ========================================================= -->
     <script src="/socket.io/socket.io.js"></script>
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
     <script src="script.js"></script>
