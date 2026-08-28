@@ -3,18 +3,18 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <meta name="theme-color" content="#0f172a">
-    <title>Altiguard | Tactical Weather & GPS Matrix</title>
+    <meta name="theme-color" content="#030712">
+    <title>Altiguard | Elite Cyber-Tactical Command</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin=""/>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
 
     <header class="app-header">
         <div class="brand">
-            <h1>ALTIGUARD</h1>
-            <p>Live GPS, Fall-Alert & Climate Telemetry</p>
+            <h1>ALTIGUARD // KERNEL v5</h1>
+            <p>Advanced Spatial Telemetry & Atmospheric Grid</p>
         </div>
         
         <div id="summaryBar" class="status-hud">
@@ -42,11 +42,11 @@
             <form id="addForm" onsubmit="return false;">
                 <div class="input-group">
                     <label>Operator Name</label>
-                    <input type="text" id="nameInput" placeholder="e.g. Aarav" required autocomplete="off">
+                    <input type="text" id="nameInput" placeholder="e.g. Vaibhav" required autocomplete="off">
                 </div>
                 <div class="input-group">
                     <label>Designation / Role</label>
-                    <input type="text" id="designationInput" placeholder="e.g. Site Engineer" required autocomplete="off">
+                    <input type="text" id="designationInput" placeholder="e.g. Lead Engineer" required autocomplete="off">
                 </div>
                 <div class="sensor-controls">
                     <button type="button" id="captureBtn" class="btn btn-sensor">📍 Auto-Fetch GPS & Altitude</button>
@@ -72,7 +72,7 @@
             <div class="panel-header"><span class="step-badge">03</span><h2>Live Atmospheric Telemetry</h2></div>
             <div id="weatherWidget" class="weather-grid">
                 <div class="weather-animation-box" id="weatherIconBox">
-                    <div class="weather-icon-placeholder" style="font-size:10px; color:#94a3b8; text-align:center;">Awaiting GPS Lock...</div>
+                    <div class="weather-icon-placeholder" style="font-size:10px; color:#64748b; text-align:center; font-family:var(--font-mono);">AWAITING GPS...</div>
                 </div>
                 <div class="weather-data-box">
                     <div class="w-stat"><span class="w-label">Temperature</span><strong id="wTemp">--°C</strong></div>
@@ -86,23 +86,23 @@
         <!-- 4. ACTIVE ROSTER -->
         <section class="panel panel-large" id="panelRoster">
             <div class="panel-header"><span class="step-badge">04</span><h2>Active Personnel Grid</h2></div>
-            <div id="emptyHint" class="empty-state"><div class="spinner"></div><p>Awaiting hardware uplink...</p></div>
+            <div id="emptyHint" class="empty-state"><div class="spinner"></div><p>AWAITING HARDWARE UPLINK...</p></div>
             <ul id="rosterList" class="roster-list"></ul>
         </section>
 
         <!-- 5. MASSIVE MAP WINDOW -->
         <section class="panel panel-hero" id="panelMap">
-            <div class="panel-header"><span class="step-badge">05</span><h2>Geographic Topography</h2></div>
+            <div class="panel-header"><span class="step-badge">05</span><h2>Geographic Topography & Emergency Hubs</h2></div>
             <div class="map-container-hero"><div id="map"></div></div>
         </section>
 
         <!-- 6. MASSIVE GRAPH WINDOW -->
         <section class="panel panel-hero" id="panelGraph">
-            <div class="panel-header"><span class="step-badge">06</span><h2>Spatial Elevation Matrix</h2></div>
+            <div class="panel-header"><span class="step-badge">06</span><h2>Spatial Elevation Matrix (Floor Levels)</h2></div>
             <div class="svg-container-hero"><svg id="graphSvg" preserveAspectRatio="xMidYMid meet"></svg></div>
         </section>
 
-        <!-- 7. ADMIN CONFIGURATION (MISSING INPUTS ADDED HERE) -->
+        <!-- 7. ADMIN CONFIGURATION -->
         <section class="panel" id="panelConfig">
             <div class="panel-header"><span class="step-badge">07</span><h2>Physics Calibration</h2></div>
             <div class="config-grid">
@@ -134,11 +134,9 @@
     </main>
 
     <div class="fab-container">
-        <button id="aiAdvisorBtn" class="fab-btn fab-ai">✨ AI Audit</button>
         <button id="sosTriggerBtn" class="fab-btn fab-sos">🚨 INITIATE SOS</button>
     </div>
 
-    <div id="aiModal" class="modal-card" hidden></div>
     <div id="alertBanner" class="toast-banner" hidden></div>
     <div id="devCredit" class="watermark">COETA ALTIGUARD // ENGINEERED BY VAIBHAV RAJU KONDANE</div>
 
