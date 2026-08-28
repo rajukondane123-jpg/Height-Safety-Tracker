@@ -53,23 +53,28 @@
                     <button type="button" id="manualToggle" class="btn btn-text">⚙️ Toggle Manual Entry</button>
                 </div>
                 <div id="gpsReadout" class="gps-readout" hidden></div>
+                
+                <!-- UPDATED: MANUAL OVERRIDE WITH LAT/LON -->
                 <div id="manualFields" class="manual-override" hidden>
-                    <label>Manual Sensor Override (m)</label>
-                    <input type="number" id="manualHeight" step="0.1" placeholder="Elevation (m)">
+                    <label>Manual Sensor Override</label>
+                    <input type="number" id="manualHeight" step="0.1" placeholder="Elevation Z-Axis (m)" style="margin-bottom: 10px;">
+                    <div class="coord-split">
+                        <input type="number" id="manualLat" step="0.000001" placeholder="Latitude (X)">
+                        <input type="number" id="manualLon" step="0.000001" placeholder="Longitude (Y)">
+                    </div>
                 </div>
+
                 <button type="submit" id="addBtn" class="btn btn-submit" disabled>+ Inject into Grid</button>
             </form>
         </section>
 
-        <!-- 3. NEW: LIVE METEOROLOGICAL DATA -->
+        <!-- 3. LIVE METEOROLOGICAL DATA -->
         <section class="panel panel-large" id="panelWeather">
             <div class="panel-header"><span class="step-badge">03</span><h2>Live Atmospheric Telemetry</h2></div>
             <div id="weatherWidget" class="weather-grid">
-                <!-- Weather Animations -->
                 <div class="weather-animation-box" id="weatherIconBox">
-                    <div class="weather-icon-placeholder">Awaiting GPS Lock...</div>
+                    <div class="weather-icon-placeholder" style="font-size:10px; color:#94a3b8; text-align:center;">Awaiting GPS Lock...</div>
                 </div>
-                <!-- Weather Data -->
                 <div class="weather-data-box">
                     <div class="w-stat"><span class="w-label">Temperature</span><strong id="wTemp">--°C</strong></div>
                     <div class="w-stat"><span class="w-label">Wind Speed</span><strong id="wWind">-- km/h</strong></div>
@@ -102,6 +107,13 @@
         <section class="panel" id="panelConfig">
             <div class="panel-header"><span class="step-badge">07</span><h2>Physics Calibration</h2></div>
             <div class="config-grid">
+                
+                <!-- NEW: ADMIN NTFY TOPIC INPUT -->
+                <div class="input-group">
+                    <label>Secret Alert Channel (Ntfy.sh Topic)</label>
+                    <input type="text" id="ntfyTopicInput" placeholder="e.g. altiguard-team-xyz" autocomplete="off" disabled title="Only Admins can edit the alert channel">
+                </div>
+
                 <div class="input-group">
                     <label>Structural Datum (Zero Point)</label>
                     <div class="flex-row">
@@ -112,6 +124,7 @@
                 <div class="input-group"><label>Safe Ceiling/Floor (± m)</label><input type="number" id="limitInput" step="0.5" value="2.0"></div>
                 <div class="input-group"><label>Kinematic Drop Limit (m)</label><input type="number" id="dropInput" step="0.1" value="1.5"></div>
             </div>
+            <button id="testAlertBtn" class="btn btn-warning full-width mt-10">⚠️ Test Siren</button>
         </section>
 
         <!-- 8. ALERT CONSOLE -->
