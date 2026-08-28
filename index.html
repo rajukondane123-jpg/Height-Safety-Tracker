@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="theme-color" content="#030712">
+    <title>Altiguard | Elite Cyber-Tactical Command</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin=""/>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+    <header class="app-header">
+        <div class="brand">
+            <h1>ALTIGUARD // KERNEL v5</h1>
+            <p>Advanced Spatial Telemetry & Atmospheric Grid</p>
+        </div>
+        
+        <div id="summaryBar" class="status-hud">
+            <div class="hud-item"><span class="hud-label">Clearance</span><strong id="statRole" class="hud-value highlight">AWAITING...</strong></div>
+            <div class="hud-item"><span class="hud-label">Active Nodes</span><strong id="statActive" class="hud-value">0 Tracked</strong></div>
+            <div class="hud-item"><span class="hud-label">System Uplink</span><strong id="statStatus" class="hud-value status-secure">🟢 SECURE</strong></div>
+        </div>
+    </header>
+
+    <main class="dashboard-grid">
+
+        <section class="panel" id="panelAuth">
+            <div class="panel-header"><span class="step-badge">01</span><h2>Admin Command & Connect</h2></div>
+            <div class="control-row"><input type="text" id="groupCodeInput" placeholder="Enter Site Code (e.g. TEAM123)" autocomplete="off"></div>
+            <div class="button-split">
+                <button id="createGroupBtn" class="btn btn-primary">👑 Create as Admin</button>
+                <button id="joinGroupActionBtn" class="btn btn-outline">👷 Join as Worker</button>
+            </div>
+        </section>
+
+        <section class="panel" id="panelInput">
+            <div class="panel-header"><span class="step-badge">02</span><h2>Node Identity & Sensor Link</h2></div>
+            <form id="addForm" onsubmit="return false;">
+                <div class="input-group">
+                    <label>Operator Name</label>
+                    <input type="text" id="nameInput" placeholder="e.g. Vaibhav" required autocomplete="off">
+                </div>
+                <div class="input-group">
+                    <label>Designation / Role</label>
+                    <input type="text" id="designationInput" placeholder="e.g. Lead Engineer" required autocomplete="off">
+                </div>
+                <div class="sensor-controls">
+                    <button type="button" id="captureBtn" class="btn btn-sensor">📍 Auto-Fetch GPS & Altitude</button>
+                    <button type="button" id="manualToggle" class="btn btn-text">⚙️ Toggle Manual Entry</button>
+                </div>
+                <div id="gpsReadout" class="gps-readout" hidden></div>
+                
+                <div id="manualFields" class="manual-override" hidden>
+                    <label>Manual Sensor Override</label>
+                    <input type="number" id="manualHeight" step="0.1" placeholder="Elevation Z-Axis (m)" style="margin-bottom: 10px;">
+                    <div class="coord-split">
+                        <input type="number" id="manualLat" step="0.000001" placeholder="Latitude (X)">
+                        <input type="number" id="manualLon" step="0.000001" placeholder="Longitude (Y)">
+                    </div>
+                </div>
+
+                <button type="submit" id="addBtn" class="btn btn-submit" disabled>+ Inject into Grid</button>
+            </form>
+        </section>
+
+        <section class="panel panel-large" id="panelWeather">
+            <div class="panel-header"><span class="step-badge">03</span><h2>Live Atmospheric Telemetry</h2></div>
+            <div id="weatherWidget" class="weather-grid">
+                <div class="weather-animation-box" id="weatherIconBox">
+                    <div class="weather-icon-placeholder" style="font-size:10px; color:#64748b; text-align:center; font-family:var(--font-mono);">AWAITING GPS...</div>
+                </div>
+                <div class="weather-data-box">
+                    <div class="w-stat"><span class="w-label">Temp</span><strong id="wTemp">--°C</strong></div>
+                    <div class="w-stat"><span class="w-label">Feels Like</span><strong id="wFeels">--°C</strong></div>
+                    <div class="w-stat"><span class="w-label">Humidity</span><strong id="wHum">--%</strong></div>
+                    <div class="w-stat"><span class="w-label">Wind Speed</span><strong id="wWind">-- km/h</strong></div>
+                    <div class="w-stat"><span class="w-label">Pressure</span><strong id="wPress">-- hPa</strong></div>
+                    <div class="w-stat"><span class="w-label">Air Quality (AQI)</span><strong id="wAqi" class="aqi-badge">--</strong></div>
+                    <div class="w-stat" style="grid-column: span 2;"><span class="w-label">Condition</span><strong id="wCondition" style="color:var(--brand-primary); font-size:1.6rem; text-shadow: 0 0 15px var(--brand-glow);">--</strong></div>
+                </div>
+            </div>
+        </section>
+
+        <section class="panel panel-large" id="panelRoster">
+            <div class="panel-header"><span class="step-badge">04</span><h2>Active Personnel Grid</h2></div>
+            <div id="emptyHint" class="empty-state"><div class="spinner"></div><p>AWAITING HARDWARE UPLINK...</p></div>
+            <ul id="rosterList" class="roster-list"></ul>
+        </section>
+
+        <section class="panel panel-hero" id="panelMap">
+            <div class="panel-header"><span class="step-badge">05</span><h2>Geographic Topography & Geofence Perimeter</h2></div>
+            <div class="map-container-hero"><div id="map"></div></div>
+        </section>
+
+        <section class="panel panel-hero" id="panelGraph">
+            <div class="panel-header"><span class="step-badge">06</span><h2>Spatial Elevation Matrix (Floor Levels)</h2></div>
+            <div class="svg-container-hero"><svg id="graphSvg" preserveAspectRatio="xMidYMid meet"></svg></div>
+        </section>
+
+        <section class="panel" id="panelConfig">
+            <div class="panel-header"><span class="step-badge">07</span><h2>Physics & Perimeter Calibration</h2></div>
+            <div class="config-grid">
+                <div class="input-group">
+                    <label>Secret Alert Channel (Ntfy.sh Topic)</label>
+                    <input type="text" id="ntfyTopicInput" placeholder="e.g. altiguard-team-xyz" autocomplete="off" disabled>
+                </div>
+                <div class="input-group">
+                    <label>Geofence Perimeter Radius (m)</label>
+                    <input type="number" id="geofenceRadiusInput" step="10" value="500" disabled>
+                </div>
+                <div class="input-group">
+                    <label>Structural Datum (Zero Point)</label>
+                    <div class="flex-row">
+                        <input type="number" id="referenceInput" step="0.1" value="0" disabled>
+                        <button id="setRefBtn" class="btn btn-outline slim" disabled>Set Zero</button>
+                    </div>
+                </div>
+                <div class="input-group"><label>Floor Height Multiplier (m)</label><input type="number" id="floorInput" step="0.1" value="3.5" disabled></div>
+                <div class="input-group"><label>Safe Ceiling/Floor (± m)</label><input type="number" id="limitInput" step="0.5" value="2.0" disabled></div>
+                <div class="input-group"><label>Kinematic Drop Limit (m)</label><input type="number" id="dropInput" step="0.1" value="1.5" disabled></div>
+                <div class="input-group"><label>Drop Window (seconds)</label><input type="number" id="windowInput" step="1" value="4" disabled></div>
+            </div>
+            <button id="testAlertBtn" class="btn btn-warning full-width mt-10">⚠️ Test Siren</button>
+        </section>
+
+        <section class="panel" id="panelLogs">
+            <div class="panel-header"><span class="step-badge">08</span><h2>Command Incident Ledger</h2></div>
+            <ul id="logList" class="console-logs"></ul>
+        </section>
+
+    </main>
+
+    <div class="fab-container">
+        <button id="sosTriggerBtn" class="fab-btn fab-sos">🚨 INITIATE SOS</button>
+    </div>
+
+    <div id="alertBanner" class="toast-banner" hidden></div>
+    <div id="devCredit" class="watermark">COETA ALTIGUARD // ENGINEERED BY VAIBHAV RAJU KONDANE</div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+    <script src="script.js"></script>
+
+</body>
+</html>
