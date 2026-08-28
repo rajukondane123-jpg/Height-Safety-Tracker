@@ -2,12 +2,6 @@
  * ============================================================================
  * ALTIGUARD KERNEL - ENTERPRISE CLIENT ENGINE (SCRIPT.JS)
  * ============================================================================
- * Description: Master controller for Spatial Physics Graphing, WebGL Maps, 
- * Sensor Fusion (Auto/Manual Lat-Lon), Open-Meteo Climate fetching, and 
- * strict Role-Based Access Control for Alerting integrations.
- * 
- * Developer: Vaibhav Raju Kondane
- * ============================================================================
  */
 
 (function () {
@@ -19,7 +13,7 @@
     const socket = io();
     
     const STATE = {
-        role: "worker", // Default to lowest clearance
+        role: "worker", 
         groupCode: null,
         mySelfId: null,
         liveTrackingId: null,
@@ -42,10 +36,8 @@
         DEFAULT_NTFY: ""
     };
 
-    // Load persisted settings
     let localSettings = loadSettings();
 
-    // Cache DOM Elements for performance
     const DOM = {
         statRole: document.getElementById("statRole"),
         statActive: document.getElementById("statActive"),
@@ -70,7 +62,6 @@
         DOM.statRole.textContent = STATE.role.toUpperCase();
         document.getElementById("groupCodeInput").value = STATE.groupCode;
         
-        // ADMIN LOCK: Ntfy Topic can only be edited by Admins
         if (STATE.role === 'admin' || STATE.role === 'creator') {
             DOM.ntfyTopicInput.disabled = false;
             DOM.ntfyTopicInput.placeholder = "Enter Ntfy Topic (e.g. altiguard-site-99)";
@@ -83,16 +74,8 @@
         renderUI();
     });
 
-    socket.on('syncGroup', (members) => { 
-        STATE.group = members; 
-        renderUI(); 
-    });
-
-    socket.on('syncBaseline', (baseline) => { 
-        STATE.globalBaseline = baseline; 
-        document.getElementById("referenceInput").value = baseline; 
-        renderUI(); 
-    });
+    socket.on('syncGroup', (members) => { STATE.group = members; renderUI(); });
+    socket.on('syncBaseline', (baseline) => { STATE.globalBaseline = baseline; document.getElementById("referenceInput").value = baseline; renderUI(); });
 
     socket.on('receiveAlert', (data) => { 
         showAlert(`⚠️ KINEMATIC ALERT: ${data.name} dropped ${data.drop}m!`); 
@@ -114,29 +97,19 @@
     // ========================================================================
     function transmitNtfyAlert(title, message, tags) {
         const topic = DOM.ntfyTopicInput.value.trim() || localSettings.ntfyTopic;
-        if (!topic) return; // Silent abort if no topic configured
-        
+        if (!topic) return; 
         const cleanTopic = topic.replace(/[^a-zA-Z0-9-_]/g, "");
-        fetch(`https://ntfy.sh/${cleanTopic}`, {
-            method: 'POST',
-            body: message,
-            headers: {
-                'Title': title,
-                'Priority': 'urgent',
-                'Tags': tags
-            }
-        }).catch(err => console.warn("[REST_ERR] Ntfy Push Failed.", err));
+        fetch(`https://ntfy.sh/${cleanTopic}`, { method: 'POST', body: message, headers: { 'Title': title, 'Priority': 'urgent', 'Tags': tags } }).catch(err => console.warn("[REST_ERR] Ntfy Push Failed.", err));
     }
 
 
     // ========================================================================
-    // 4. METEOROLOGY & REVERSE GEOCODING (OPEN-METEO / OSM)
+    // 4. METEOROLOGY & REVERSE GEOCODING
     // ========================================================================
     async function fetchWeatherAndAQI(lat, lon) {
         try {
             const weatherRes = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current_weather=true`);
             const weatherData = await weatherRes.json();
-            
             const aqiRes = await fetch(`https://air-quality-api.open-meteo.com/v1/air-quality?latitude=${lat}&longitude=${lon}&current=european_aqi`);
             const aqiData = await aqiRes.json();
 
@@ -148,7 +121,6 @@
             document.getElementById("wTemp").innerText = `${temp}°C`;
             document.getElementById("wWind").innerText = `${wind} km/h`;
             
-            // Render AQI Color Badge
             const aqiEl = document.getElementById("wAqi");
             aqiEl.innerText = aqi;
             aqiEl.className = "aqi-badge";
@@ -156,20 +128,12 @@
             else if (aqi < 80) aqiEl.classList.add("aqi-mod");
             else aqiEl.classList.add("aqi-poor");
 
-            // Atmospheric Animations Logic
             const iconBox = document.getElementById("weatherIconBox");
             const conditionEl = document.getElementById("wCondition");
             
-            if (code === 0 || code === 1) {
-                conditionEl.innerText = "Clear & Sunny";
-                iconBox.innerHTML = `<div class="anim-sun"></div>`;
-            } else if (code >= 51 && code <= 67) {
-                conditionEl.innerText = "Rain Precipitation";
-                iconBox.innerHTML = `<div class="anim-cloud anim-rain"></div>`;
-            } else {
-                conditionEl.innerText = "Cloudy / Overcast";
-                iconBox.innerHTML = `<div class="anim-cloud"></div>`;
-            }
+            if (code === 0 || code === 1) { conditionEl.innerText = "Clear & Sunny"; iconBox.innerHTML = `<div class="anim-sun"></div>`; } 
+            else if (code >= 51 && code <= 67) { conditionEl.innerText = "Rain Precipitation"; iconBox.innerHTML = `<div class="anim-cloud anim-rain"></div>`; } 
+            else { conditionEl.innerText = "Cloudy / Overcast"; iconBox.innerHTML = `<div class="anim-cloud"></div>`; }
         } catch (e) { console.error("[CLIMATE_ERR] Weather fetch failed", e); }
     }
 
@@ -177,10 +141,7 @@
         try {
             const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lon}`);
             const data = await res.json();
-            if (data && data.address) {
-                const addr = data.address;
-                return `${addr.road || addr.suburb || ''}, ${addr.city || addr.town || addr.county || ''} - ${addr.postcode || ''}`;
-            }
+            if (data && data.address) { const addr = data.address; return `${addr.road || addr.suburb || ''}, ${addr.city || addr.town || addr.county || ''} - ${addr.postcode || ''}`; }
             return "Coordinates locked. Address unavailable.";
         } catch(e) { return "Coordinates locked. Address unavailable."; }
     }
@@ -189,27 +150,18 @@
     // ========================================================================
     // 5. DOM INTERACTION & EVENT BINDINGS
     // ========================================================================
-    document.getElementById("createGroupBtn").addEventListener("click", () => {
-        socket.emit('createGroup', document.getElementById("groupCodeInput").value);
-    });
-
+    document.getElementById("createGroupBtn").addEventListener("click", () => { socket.emit('createGroup', document.getElementById("groupCodeInput").value); });
     document.getElementById("joinGroupActionBtn").addEventListener("click", () => {
         const code = document.getElementById("groupCodeInput").value;
         if (!code) return showAlert("Matrix Error: Please enter a Site Code.");
         socket.emit('joinGroup', code);
     });
 
-    // Zero-Point Calibration
     document.getElementById("setRefBtn").addEventListener("click", () => {
         const val = parseFloat(document.getElementById("referenceInput").value) || 0;
-        STATE.globalBaseline = val; 
-        socket.emit('setBaseline', val);
-        renderUI();
-        showAlert(`Datum Zero calibrated to ${val}m`);
-        logEvent(`System Datum re-calibrated to ${val}m`);
+        STATE.globalBaseline = val; socket.emit('setBaseline', val); renderUI(); showAlert(`Datum Zero calibrated to ${val}m`); logEvent(`System Datum re-calibrated to ${val}m`);
     });
 
-    // Manual/Auto Toggle
     document.getElementById("manualToggle").addEventListener("click", () => {
         STATE.isManualMode = !STATE.isManualMode;
         DOM.manualFields.hidden = !STATE.isManualMode;
@@ -217,42 +169,31 @@
         document.getElementById("addBtn").disabled = false;
     });
 
-    // Auto-Fetch GPS Sequence
     document.getElementById("captureBtn").addEventListener("click", () => {
         DOM.gpsReadout.hidden = false;
         DOM.gpsReadout.innerHTML = `<div class="spinner" style="width:15px;height:15px;display:inline-block;vertical-align:middle;margin-right:10px;"></div> Acquiring Satellite Lock...`;
 
         navigator.geolocation.getCurrentPosition(async (pos) => {
-            const lat = pos.coords.latitude;
-            const lon = pos.coords.longitude;
-            const alt = pos.coords.altitude || 0;
-            
+            const lat = pos.coords.latitude; const lon = pos.coords.longitude; const alt = pos.coords.altitude || 0;
             DOM.gpsReadout.innerHTML = `Fetching precise address & climate data...`;
             
-            // Parallel Fetch for Speed
-            const [address] = await Promise.all([
-                fetchAddress(lat, lon),
-                fetchWeatherAndAQI(lat, lon)
-            ]);
-            
+            const [address] = await Promise.all([ fetchAddress(lat, lon), fetchWeatherAndAQI(lat, lon) ]);
             STATE.pendingLocation = { lat, lon, height: alt };
 
-            DOM.gpsReadout.innerHTML = `
-                <strong style="color:var(--brand-primary);">📍 Lock Acquired</strong><br>
-                <span style="font-family:monospace; color:#ccc;">Coord: ${lat.toFixed(5)}, ${lon.toFixed(5)}</span><br>
-                <span style="font-size:0.8rem; color:var(--text-muted);">${address}</span>
-            `;
-            
-            document.getElementById("addBtn").disabled = false;
-            STATE.isManualMode = false;
-            DOM.manualFields.hidden = true;
-        }, (err) => {
-            DOM.gpsReadout.innerHTML = `<span style="color:var(--accent-danger);">❌ GPS Error: ${err.message}</span>`;
-        }, { enableHighAccuracy: true });
+            DOM.gpsReadout.innerHTML = `<strong style="color:var(--brand-primary);">📍 Lock Acquired</strong><br><span style="font-family:monospace; color:#ccc;">Coord: ${lat.toFixed(5)}, ${lon.toFixed(5)}</span><br><span style="font-size:0.8rem; color:var(--text-muted);">${address}</span>`;
+            document.getElementById("addBtn").disabled = false; STATE.isManualMode = false; DOM.manualFields.hidden = true;
+        }, (err) => { DOM.gpsReadout.innerHTML = `<span style="color:var(--accent-danger);">❌ GPS Error: ${err.message}</span>`; }, { enableHighAccuracy: true });
     });
 
-    // Inject Operator into Matrix
+    // --- PATCHED INJECTION LOGIC ---
     document.getElementById("addForm").addEventListener("submit", (e) => {
+        e.preventDefault();
+
+        // 1. Strict Group Check
+        if (!STATE.groupCode) {
+            return showAlert("⚠️ Action Denied: You must Create or Join a group (Step 01) first!");
+        }
+
         const name = document.getElementById("nameInput").value.trim();
         const designation = document.getElementById("designationInput").value.trim();
         if (!name || !designation) return;
@@ -261,52 +202,57 @@
         
         let pLat = null, pLon = null, pHeight = 0;
 
-        // Extract coordinates based on active mode
         if (STATE.isManualMode) {
             pHeight = parseFloat(document.getElementById("manualHeight").value) || 0;
             pLat = parseFloat(document.getElementById("manualLat").value) || null;
             pLon = parseFloat(document.getElementById("manualLon").value) || null;
-            
-            // If manual coordinates provided, update weather
             if (pLat !== null && pLon !== null) fetchWeatherAndAQI(pLat, pLon);
         } else if (STATE.pendingLocation) {
-            pLat = STATE.pendingLocation.lat;
-            pLon = STATE.pendingLocation.lon;
-            pHeight = STATE.pendingLocation.height;
+            pLat = STATE.pendingLocation.lat; pLon = STATE.pendingLocation.lon; pHeight = STATE.pendingLocation.height;
         }
 
-        const person = {
-            id: STATE.mySelfId,
-            name: name,
-            designation: designation,
-            height: pHeight,
-            lat: pLat,
-            lon: pLon,
-            method: STATE.isManualMode ? "manual" : "auto"
-        };
+        const person = { id: STATE.mySelfId, name: name, designation: designation, height: pHeight, lat: pLat, lon: pLon, method: STATE.isManualMode ? "manual" : "auto" };
 
         const existingIndex = STATE.group.findIndex(p => p.id === STATE.mySelfId);
         if (existingIndex > -1) STATE.group[existingIndex] = person;
         else STATE.group.push(person);
 
         socket.emit('updateGroupData', STATE.group);
-        
         if (!STATE.isManualMode) startTracking(STATE.mySelfId);
+        
+        // 2. Clear Form & Visual Feedback
+        document.getElementById("nameInput").value = "";
+        document.getElementById("designationInput").value = "";
+        
+        if (!STATE.isManualMode) {
+            DOM.gpsReadout.innerHTML = `<strong style="color:var(--accent-success);">✓ Sensor Link Established</strong>`;
+            setTimeout(() => { DOM.gpsReadout.hidden = true; }, 3000);
+        }
+        
+        const btn = document.getElementById("addBtn");
+        btn.textContent = "✓ INJECTED";
+        btn.style.background = "var(--accent-success)";
+        btn.style.color = "#000";
+        
+        setTimeout(() => {
+            btn.textContent = "+ Inject into Grid";
+            btn.style.background = "";
+            btn.style.color = "";
+            btn.disabled = true; 
+        }, 2000);
+
         renderUI();
+        showAlert(`✅ ${name} successfully injected into the matrix.`);
     });
 
-    // Settings Autosave
     const saveSettings = () => { 
         localSettings.limit = parseFloat(document.getElementById("limitInput").value) || CONFIG.DEFAULT_LIMIT; 
         localSettings.dropThreshold = parseFloat(document.getElementById("dropInput").value) || CONFIG.DEFAULT_DROP; 
         localSettings.dropWindow = parseInt(document.getElementById("windowInput").value, 10) || CONFIG.DEFAULT_WINDOW; 
         localSettings.ntfyTopic = DOM.ntfyTopicInput.value.trim() || ""; 
-        localStorage.setItem(CONFIG.STORAGE_KEY, JSON.stringify(localSettings)); 
-        renderUI(); 
+        localStorage.setItem(CONFIG.STORAGE_KEY, JSON.stringify(localSettings)); renderUI(); 
     };
-    ["limitInput", "dropInput", "windowInput", "ntfyTopicInput"].forEach(id => { 
-        document.getElementById(id).addEventListener("input", saveSettings); 
-    });
+    ["limitInput", "dropInput", "windowInput", "ntfyTopicInput"].forEach(id => { document.getElementById(id).addEventListener("input", saveSettings); });
 
 
     // ========================================================================
@@ -314,10 +260,7 @@
     // ========================================================================
     document.getElementById("testAlertBtn").addEventListener("click", () => {
         const testData = { name: "System Diagnostic", drop: 1.5, id: "test" };
-        socket.emit('triggerFallAlert', testData);
-        showAlert(`⚠️ TEST SIREN INITIATED`);
-        logEvent("Test alert broadcasted.");
-        transmitNtfyAlert("⚠️ TEST SIREN", "A diagnostic test siren has been activated by Command.", "loudspeaker");
+        socket.emit('triggerFallAlert', testData); showAlert(`⚠️ TEST SIREN INITIATED`); logEvent("Test alert broadcasted."); transmitNtfyAlert("⚠️ TEST SIREN", "A diagnostic test siren has been activated by Command.", "loudspeaker");
     });
 
     document.getElementById("sosTriggerBtn").addEventListener("click", () => {
@@ -330,41 +273,26 @@
     // ========================================================================
     // 7. KINEMATICS & LIVE TRACKING ENGINE
     // ========================================================================
-    window.toggleTrack = function(id) {
-        if (STATE.liveTrackingId === id) stopTracking();
-        else startTracking(id);
-    };
-
-    window.removeNode = function(id) {
-        if (STATE.liveTrackingId === id) stopTracking();
-        socket.emit('removePerson', id);
-    };
+    window.toggleTrack = function(id) { if (STATE.liveTrackingId === id) stopTracking(); else startTracking(id); };
+    window.removeNode = function(id) { if (STATE.liveTrackingId === id) stopTracking(); socket.emit('removePerson', id); };
 
     function startTracking(personId) {
         if (!navigator.geolocation) return showAlert("Hardware Error: Geolocation disabled.");
-        stopTracking();
-        STATE.liveTrackingId = personId;
-        renderUI(); 
+        stopTracking(); STATE.liveTrackingId = personId; renderUI(); 
 
         STATE.gpsWatchId = navigator.geolocation.watchPosition((pos) => {
             const person = STATE.group.find(p => p.id === STATE.liveTrackingId);
             if (person) {
-                person.lat = pos.coords.latitude;
-                person.lon = pos.coords.longitude;
+                person.lat = pos.coords.latitude; person.lon = pos.coords.longitude;
                 if (pos.coords.altitude !== null) person.height = pos.coords.altitude;
-                
-                checkKinematicDrop(person);
-                socket.emit('updateGroupData', STATE.group);
-                renderUI();
+                checkKinematicDrop(person); socket.emit('updateGroupData', STATE.group); renderUI();
             }
         }, (err) => { showAlert(`GPS Interruption: ${err.message}`); }, { enableHighAccuracy: true, maximumAge: 0 });
     }
 
     function stopTracking() {
         if (STATE.gpsWatchId) navigator.geolocation.clearWatch(STATE.gpsWatchId);
-        STATE.liveTrackingId = null;
-        STATE.gpsWatchId = null;
-        renderUI();
+        STATE.liveTrackingId = null; STATE.gpsWatchId = null; renderUI();
     }
 
     function checkKinematicDrop(person) {
@@ -388,20 +316,12 @@
 
 
     // ========================================================================
-    // 8. MASTER RENDER ENGINE (UI, SVG GRAPH, LEAFLET MAP)
+    // 8. MASTER RENDER ENGINE
     // ========================================================================
     function renderUI() {
         DOM.statActive.textContent = `${STATE.group.length} Tracked`;
-        
-        if (STATE.group.length === 0) {
-            DOM.emptyHint.style.display = "flex";
-            DOM.rosterList.innerHTML = ""; 
-            DOM.graphSvg.innerHTML = "";
-        } else {
-            DOM.emptyHint.style.display = "none";
-            renderRoster();
-            renderGraph();
-        }
+        if (STATE.group.length === 0) { DOM.emptyHint.style.display = "flex"; DOM.rosterList.innerHTML = ""; DOM.graphSvg.innerHTML = ""; } 
+        else { DOM.emptyHint.style.display = "none"; renderRoster(); renderGraph(); }
         renderMap();
     }
 
@@ -432,27 +352,16 @@
         }).join('');
     }
 
-    // Y-AXIS GRAPH GENERATOR
     function renderGraph() {
-        const W = DOM.graphSvg.clientWidth || 1000; 
-        const H = DOM.graphSvg.clientHeight || 600; 
-        
-        // Ensure padding is large enough on the left to accommodate the Y-Axis Labels
-        const paddingLeft = 60; 
-        const paddingRight = 40;
-        const paddingTopBottom = 60;
-        
+        const W = DOM.graphSvg.clientWidth || 1000; const H = DOM.graphSvg.clientHeight || 600; 
+        const paddingLeft = 60; const paddingRight = 40; const paddingTopBottom = 60;
         const limit = parseFloat(document.getElementById("limitInput").value) || CONFIG.DEFAULT_LIMIT;
         const rels = STATE.group.map(p => p.height - STATE.globalBaseline);
         const maxAbs = Math.max(limit * 1.5, ...rels.map(Math.abs), 1);
-        
         const plotHeight = H - (paddingTopBottom * 2);
-        const scaleY = (plotHeight / 2) / maxAbs; 
-        const midY = H / 2;
+        const scaleY = (plotHeight / 2) / maxAbs; const midY = H / 2;
 
         let svgHtml = "";
-
-        // Y-AXIS GRID LINES & LABELS
         const step = Utils.niceStep(maxAbs);
         for (let v = step; v <= maxAbs; v += step) {
             [v, -v].forEach(val => {
@@ -464,19 +373,14 @@
             });
         }
 
-        // DATUM ZERO BASELINE
         svgHtml += `<line class="baseline" x1="${paddingLeft}" y1="${midY}" x2="${W - paddingRight}" y2="${midY}"></line>`;
         svgHtml += `<text class="axis-label" x="${paddingLeft - 10}" y="${midY + 4}" fill="#38bdf8" font-weight="bold" text-anchor="end">0m</text>`;
         svgHtml += `<text class="axis-label" x="${W - paddingRight}" y="${midY - 10}" fill="#38bdf8" text-anchor="end">DATUM ZERO</text>`;
 
-        // PLOT SVG 2D HUMAN FIGURES
         STATE.group.forEach((p, i) => {
             const rel = p.height - STATE.globalBaseline;
-            
-            // Distribute figures evenly across the available plot width
             const usableWidth = W - paddingLeft - paddingRight;
             const x = paddingLeft + (usableWidth * (i + 0.5)) / STATE.group.length;
-            
             const y = midY - (rel * scaleY);
             const status = rel > limit ? "above" : rel < -limit ? "below" : "within";
 
@@ -484,20 +388,17 @@
                 <g class="figure figure-${status}" style="transform: translate(${x}px, ${y}px)">
                     ${p.id === STATE.liveTrackingId ? '<circle class="live-halo" r="30" cy="-10"></circle>' : ''}
                     <text class="figure-readout" x="0" y="-55" text-anchor="middle" font-size="16" font-weight="bold">${(rel >= 0 ? "+" : "")}${rel.toFixed(2)}m</text>
-                    
                     <circle class="figure-head" cx="0" cy="-30" r="10"></circle>
                     <line class="figure-body" x1="0" y1="-20" x2="0" y2="10"></line>
                     <line class="figure-arm" x1="0" y1="-15" x2="-15" y2="-5"></line>
                     <line class="figure-arm" x1="0" y1="-15" x2="15" y2="-5"></line>
                     <line class="figure-leg" x1="0" y1="10" x2="-12" y2="30"></line>
                     <line class="figure-leg" x1="0" y1="10" x2="12" y2="30"></line>
-                    
                     <text class="figure-label" x="0" y="55" text-anchor="middle" font-size="14" font-weight="bold" fill="#fff">${Utils.escapeHtml(p.name)}</text>
                     <text class="figure-label-sub" x="0" y="70" text-anchor="middle" font-size="11" fill="#94a3b8">${Utils.escapeHtml(p.designation)}</text>
                 </g>
             `;
         });
-        
         DOM.graphSvg.innerHTML = svgHtml;
     }
 
@@ -510,22 +411,16 @@
 
         const currentIds = STATE.group.map(p => p.id);
         for (let id in STATE.mapMarkers) {
-            if (!currentIds.includes(id)) { 
-                STATE.mapInstance.removeLayer(STATE.mapMarkers[id]); 
-                delete STATE.mapMarkers[id]; 
-            }
+            if (!currentIds.includes(id)) { STATE.mapInstance.removeLayer(STATE.mapMarkers[id]); delete STATE.mapMarkers[id]; }
         }
 
         STATE.group.forEach(p => {
             if (p.lat !== null && p.lon !== null) {
-                if (STATE.mapMarkers[p.id]) {
-                    STATE.mapMarkers[p.id].setLatLng([p.lat, p.lon]);
-                } else {
+                if (STATE.mapMarkers[p.id]) { STATE.mapMarkers[p.id].setLatLng([p.lat, p.lon]); } 
+                else {
                     const iconHtml = `<svg width="30" height="30" viewBox="0 0 24 24" fill="${p.id === STATE.liveTrackingId ? '#f59e0b' : '#38bdf8'}"><circle cx="12" cy="12" r="10" stroke="#fff" stroke-width="2"/></svg>`;
                     const divIcon = L.divIcon({ className: 'tactical-marker', html: iconHtml, iconSize: [30,30] });
-                    STATE.mapMarkers[p.id] = L.marker([p.lat, p.lon], { icon: divIcon })
-                        .addTo(STATE.mapInstance)
-                        .bindPopup(`<b>${Utils.escapeHtml(p.name)}</b><br>${Utils.escapeHtml(p.designation)}<br>Lat: ${p.lat.toFixed(5)}<br>Lon: ${p.lon.toFixed(5)}`);
+                    STATE.mapMarkers[p.id] = L.marker([p.lat, p.lon], { icon: divIcon }).addTo(STATE.mapInstance).bindPopup(`<b>${Utils.escapeHtml(p.name)}</b><br>${Utils.escapeHtml(p.designation)}<br>Lat: ${p.lat.toFixed(5)}<br>Lon: ${p.lon.toFixed(5)}`);
                 }
             }
         });
@@ -534,44 +429,17 @@
     // ========================================================================
     // 9. HELPER UTILITIES
     // ========================================================================
-    function loadSettings() {
-        try { return JSON.parse(localStorage.getItem(CONFIG.STORAGE_KEY)) || { ...CONFIG }; }
-        catch (e) { return { ...CONFIG }; }
-    }
-
-    function showAlert(msg) {
-        DOM.alertBanner.textContent = msg; 
-        DOM.alertBanner.classList.add("show"); 
-        DOM.alertBanner.hidden = false;
-        setTimeout(() => DOM.alertBanner.classList.remove("show"), 5000);
-    }
-
-    function logEvent(msg) {
-        STATE.logs.unshift(`[${new Date().toLocaleTimeString()}] ${msg}`);
-        if(STATE.logs.length > 30) STATE.logs.pop();
-        DOM.logList.innerHTML = STATE.logs.map(l => `<li class="log-item">${l}</li>`).join("");
-    }
-
-    function triggerHaptics() { 
-        if (navigator.vibrate) navigator.vibrate([200, 100, 200, 100, 400]); 
-    }
+    function loadSettings() { try { return JSON.parse(localStorage.getItem(CONFIG.STORAGE_KEY)) || { ...CONFIG }; } catch (e) { return { ...CONFIG }; } }
+    function showAlert(msg) { DOM.alertBanner.textContent = msg; DOM.alertBanner.classList.add("show"); DOM.alertBanner.hidden = false; setTimeout(() => DOM.alertBanner.classList.remove("show"), 5000); }
+    function logEvent(msg) { STATE.logs.unshift(`[${new Date().toLocaleTimeString()}] ${msg}`); if(STATE.logs.length > 30) STATE.logs.pop(); DOM.logList.innerHTML = STATE.logs.map(l => `<li class="log-item">${l}</li>`).join(""); }
+    function triggerHaptics() { if (navigator.vibrate) navigator.vibrate([200, 100, 200, 100, 400]); }
 
     const Utils = {
         escapeHtml: (str) => String(str).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])),
-        niceStep: (maxVal) => {
-            const rough = maxVal / 4; 
-            const mag = Math.pow(10, Math.floor(Math.log10(rough || 1))); 
-            const norm = rough / mag; 
-            return norm < 1.5 ? 1 * mag : norm < 3 ? 2 * mag : norm < 7 ? 5 * mag : 10 * mag;
-        }
+        niceStep: (maxVal) => { const rough = maxVal / 4; const mag = Math.pow(10, Math.floor(Math.log10(rough || 1))); const norm = rough / mag; return norm < 1.5 ? 1 * mag : norm < 3 ? 2 * mag : norm < 7 ? 5 * mag : 10 * mag; }
     };
 
-    // Initialize Map and UI state based on persisted settings
     if (typeof L !== "undefined") setTimeout(renderMap, 500);
-    
-    document.getElementById("limitInput").value = localSettings.limit;
-    document.getElementById("dropInput").value = localSettings.dropThreshold;
-    document.getElementById("windowInput").value = localSettings.dropWindow;
-    DOM.ntfyTopicInput.value = localSettings.ntfyTopic;
+    document.getElementById("limitInput").value = localSettings.limit; document.getElementById("dropInput").value = localSettings.dropThreshold; document.getElementById("windowInput").value = localSettings.dropWindow; DOM.ntfyTopicInput.value = localSettings.ntfyTopic;
 
 })();
