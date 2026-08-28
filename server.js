@@ -1,6 +1,6 @@
 /**
  * =========================================================
- * ALTIGUARD - SERVER.JS
+ * ALTIGUARD KERNEL - BACKEND SERVER (SERVER.JS)
  * =========================================================
  */
 const express = require('express');
@@ -77,4 +77,4 @@ io.on('connection', (socket) => {
 });
 
 const PORT = process.env.PORT || 3000;
-http.listen(PORT, () => console.log(`📡 Altiguard Server active on port ${PORT}`));
+http.listen(PORT, () => console.log(`🚀 Altiguard Tactical Core online on port ${PORT}`));
