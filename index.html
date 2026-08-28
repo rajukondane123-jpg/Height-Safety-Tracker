@@ -75,10 +75,13 @@
                     <div class="weather-icon-placeholder" style="font-size:10px; color:#64748b; text-align:center; font-family:var(--font-mono);">AWAITING GPS...</div>
                 </div>
                 <div class="weather-data-box">
-                    <div class="w-stat"><span class="w-label">Temperature</span><strong id="wTemp">--°C</strong></div>
+                    <div class="w-stat"><span class="w-label">Temp</span><strong id="wTemp">--°C</strong></div>
+                    <div class="w-stat"><span class="w-label">Feels Like</span><strong id="wFeels">--°C</strong></div>
+                    <div class="w-stat"><span class="w-label">Humidity</span><strong id="wHum">--%</strong></div>
                     <div class="w-stat"><span class="w-label">Wind Speed</span><strong id="wWind">-- km/h</strong></div>
+                    <div class="w-stat"><span class="w-label">Pressure</span><strong id="wPress">-- hPa</strong></div>
                     <div class="w-stat"><span class="w-label">Air Quality (AQI)</span><strong id="wAqi" class="aqi-badge">--</strong></div>
-                    <div class="w-stat"><span class="w-label">Condition</span><strong id="wCondition" style="color:var(--brand-primary);">--</strong></div>
+                    <div class="w-stat" style="grid-column: span 2;"><span class="w-label">Condition</span><strong id="wCondition" style="color:var(--brand-primary); font-size:1.6rem; text-shadow: 0 0 15px var(--brand-glow);">--</strong></div>
                 </div>
             </div>
         </section>
@@ -92,7 +95,7 @@
 
         <!-- 5. MASSIVE MAP WINDOW -->
         <section class="panel panel-hero" id="panelMap">
-            <div class="panel-header"><span class="step-badge">05</span><h2>Geographic Topography & Emergency Hubs</h2></div>
+            <div class="panel-header"><span class="step-badge">05</span><h2>Geographic Topography & Geofence Perimeter</h2></div>
             <div class="map-container-hero"><div id="map"></div></div>
         </section>
 
@@ -104,23 +107,27 @@
 
         <!-- 7. ADMIN CONFIGURATION -->
         <section class="panel" id="panelConfig">
-            <div class="panel-header"><span class="step-badge">07</span><h2>Physics Calibration</h2></div>
+            <div class="panel-header"><span class="step-badge">07</span><h2>Physics & Perimeter Calibration</h2></div>
             <div class="config-grid">
                 <div class="input-group">
                     <label>Secret Alert Channel (Ntfy.sh Topic)</label>
                     <input type="text" id="ntfyTopicInput" placeholder="e.g. altiguard-team-xyz" autocomplete="off" disabled>
                 </div>
                 <div class="input-group">
+                    <label>Geofence Perimeter Radius (m)</label>
+                    <input type="number" id="geofenceRadiusInput" step="10" value="500" disabled>
+                </div>
+                <div class="input-group">
                     <label>Structural Datum (Zero Point)</label>
                     <div class="flex-row">
-                        <input type="number" id="referenceInput" step="0.1" value="0">
-                        <button id="setRefBtn" class="btn btn-outline slim">Set Zero</button>
+                        <input type="number" id="referenceInput" step="0.1" value="0" disabled>
+                        <button id="setRefBtn" class="btn btn-outline slim" disabled>Set Zero</button>
                     </div>
                 </div>
-                <div class="input-group"><label>Floor Height Multiplier (m)</label><input type="number" id="floorInput" step="0.1" value="3.5"></div>
-                <div class="input-group"><label>Safe Ceiling/Floor (± m)</label><input type="number" id="limitInput" step="0.5" value="2.0"></div>
-                <div class="input-group"><label>Kinematic Drop Limit (m)</label><input type="number" id="dropInput" step="0.1" value="1.5"></div>
-                <div class="input-group"><label>Drop Window (seconds)</label><input type="number" id="windowInput" step="1" value="4"></div>
+                <div class="input-group"><label>Floor Height Multiplier (m)</label><input type="number" id="floorInput" step="0.1" value="3.5" disabled></div>
+                <div class="input-group"><label>Safe Ceiling/Floor (± m)</label><input type="number" id="limitInput" step="0.5" value="2.0" disabled></div>
+                <div class="input-group"><label>Kinematic Drop Limit (m)</label><input type="number" id="dropInput" step="0.1" value="1.5" disabled></div>
+                <div class="input-group"><label>Drop Window (seconds)</label><input type="number" id="windowInput" step="1" value="4" disabled></div>
             </div>
             <button id="testAlertBtn" class="btn btn-warning full-width mt-10">⚠️ Test Siren</button>
         </section>
