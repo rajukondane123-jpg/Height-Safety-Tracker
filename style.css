@@ -50,7 +50,6 @@ html, body {
     overflow-x: hidden;
 }
 
-/* Ambient Cyber Orbs */
 body::before, body::after {
     content: ''; position: fixed; border-radius: 50%; filter: blur(120px); z-index: -1;
     animation: floatOrb 15s infinite alternate ease-in-out; pointer-events: none;
@@ -143,43 +142,49 @@ input:disabled { opacity: 0.3; cursor: not-allowed; border-left-color: var(--acc
 
 .btn-primary { background: linear-gradient(135deg, var(--brand-secondary), var(--brand-primary)); color: #fff; box-shadow: 0 4px 20px rgba(112, 0, 255, 0.4); border: 1px solid rgba(255,255,255,0.2); }
 .btn-primary:hover { box-shadow: 0 6px 25px rgba(0, 240, 255, 0.6); transform: translateY(-2px); }
-
 .btn-outline { background: rgba(0,0,0,0.5); border-color: var(--brand-primary); color: var(--brand-primary); }
 .btn-outline:hover { background: var(--brand-primary); color: #000; box-shadow: 0 0 20px var(--brand-glow); }
-
 .btn-submit { background: #fff; color: #000; width: 100%; }
 .btn-submit:hover { background: var(--brand-primary); box-shadow: 0 0 20px var(--brand-primary); }
-
 .btn-sensor { background: rgba(0, 255, 157, 0.1); border-color: var(--accent-success); color: var(--accent-success); width: 100%; box-shadow: inset 0 0 10px rgba(0, 255, 157, 0.1); }
 .btn-sensor:hover { background: var(--accent-success); color: #000; box-shadow: 0 0 20px rgba(0, 255, 157, 0.5); }
-
 .btn-text { background: transparent; color: var(--text-muted); padding: 8px; }
 .btn-text:hover { color: #fff; }
-
 .btn-warning { background: rgba(255, 0, 85, 0.1); border-color: var(--accent-danger); color: var(--accent-danger); box-shadow: inset 0 0 10px rgba(255, 0, 85, 0.1); }
 .btn-warning:hover { background: var(--accent-danger); color: #fff; box-shadow: 0 5px 25px var(--accent-danger-glow); transform: translateY(-2px); }
 .slim { padding: 8px 16px; } .full-width { width: 100%; } .mt-10 { margin-top: 10px; }
 
 .manual-override, .gps-readout { background: rgba(0,0,0,0.5); padding: 15px; border-radius: var(--radius-sm); margin-bottom: 16px; font-size: 0.9rem; border: 1px solid var(--brand-primary); box-shadow: inset 0 0 15px rgba(0, 240, 255, 0.1); animation: slideDown 0.3s ease-out; }
 
-/* --- WEATHER WIDGET --- */
+/* --- WEATHER WIDGET (NEW DETAILED ANIMATIONS) --- */
 .weather-grid { display: flex; gap: 30px; align-items: center; background: rgba(0, 0, 0, 0.5); border: 1px solid rgba(255, 255, 255, 0.08); padding: 30px; border-radius: var(--radius-md); position: relative; overflow: hidden; }
-.weather-animation-box { flex: 0 0 150px; height: 150px; display: flex; justify-content: center; align-items: center; background: rgba(0, 0, 0, 0.7); border-radius: 50%; border: 2px dashed rgba(0, 240, 255, 0.3); box-shadow: inset 0 0 20px rgba(0,0,0,0.8); }
-.weather-data-box { flex: 1; display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 20px; }
+.weather-grid::before { content:''; position:absolute; top:0; right:0; width:300px; height:100%; background: radial-gradient(circle, rgba(0,240,255,0.05), transparent); z-index: 0; }
+.weather-animation-box { flex: 0 0 160px; height: 160px; display: flex; justify-content: center; align-items: center; background: rgba(0, 0, 0, 0.7); border-radius: 50%; border: 2px dashed rgba(0, 240, 255, 0.3); box-shadow: inset 0 0 20px rgba(0,0,0,0.8); }
+
+.weather-data-box { flex: 1; display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 20px; z-index: 1; }
 .w-stat { display: flex; flex-direction: column; background: rgba(255,255,255,0.02); padding: 15px; border-radius: 8px; border-left: 2px solid var(--brand-primary); }
 .w-label { font-size: 0.75rem; color: var(--brand-primary); text-transform: uppercase; font-family: var(--font-mono); margin-bottom: 5px; }
-.w-stat strong { font-size: 1.8rem; font-family: var(--font-mono); color: #fff; text-shadow: 0 0 10px rgba(255,255,255,0.2); }
+.w-stat strong { font-size: 1.6rem; font-family: var(--font-mono); color: #fff; text-shadow: 0 0 10px rgba(255,255,255,0.2); }
 
-.aqi-badge { padding: 2px 12px; border-radius: 6px; display: inline-block; width: max-content; font-weight: 800; }
+.aqi-badge { padding: 2px 12px; border-radius: 6px; display: inline-block; width: max-content; font-weight: 800; font-size: 1.4rem !important;}
 .aqi-good { background: rgba(0, 255, 157, 0.15); color: var(--accent-success); border: 1px solid var(--accent-success); box-shadow: 0 0 10px rgba(0,255,157,0.2); }
 .aqi-mod { background: rgba(255, 184, 0, 0.15); color: var(--accent-warning); border: 1px solid var(--accent-warning); box-shadow: 0 0 10px rgba(255,184,0,0.2); }
 .aqi-poor { background: rgba(255, 0, 85, 0.15); color: var(--accent-danger); border: 1px solid var(--accent-danger); box-shadow: 0 0 10px rgba(255,0,85,0.2); }
 
-.anim-sun { width: 60px; height: 60px; background: #ffb800; border-radius: 50%; box-shadow: 0 0 40px #ffb800; animation: pulseSun 2s infinite alternate; }
+/* Weather Dynamic Conditions */
+.anim-sun-cloud-wrapper { position: relative; width: 80px; height: 60px; }
+.anim-sun-cloud-wrapper .anim-sun { position: absolute; top: -15px; right: -10px; transform: scale(0.6); z-index: 0; animation: pulseSun 2s infinite alternate; }
+.anim-sun-cloud-wrapper .anim-cloud { position: absolute; bottom: 0; left: 0; z-index: 1; }
+
+.anim-sun { width: 65px; height: 65px; background: #ffb800; border-radius: 50%; box-shadow: 0 0 40px #ffb800; animation: pulseSun 2s infinite alternate; }
 .anim-cloud { width: 80px; height: 30px; background: #94a3b8; border-radius: 20px; position: relative; animation: floatCloud 4s infinite ease-in-out; box-shadow: 0 0 20px rgba(255,255,255,0.2); }
 .anim-cloud::before { content: ''; position: absolute; top: -20px; left: 15px; width: 40px; height: 40px; background: #94a3b8; border-radius: 50%; }
 .anim-cloud::after { content: ''; position: absolute; top: -10px; right: 15px; width: 30px; height: 30px; background: #94a3b8; border-radius: 50%; }
+
 .anim-rain::after { content: '///'; position: absolute; bottom: -30px; left: 20px; color: var(--brand-primary); font-family: monospace; font-size: 20px; animation: rainDrop 0.6s infinite linear; text-shadow: 0 0 10px var(--brand-primary); }
+.anim-snow::after { content: '* * *'; position: absolute; bottom: -30px; left: 15px; color: #fff; font-family: monospace; font-size: 24px; animation: rainDrop 1.5s infinite linear; text-shadow: 0 0 10px #fff; }
+
+.anim-lightning { animation: floatCloud 4s infinite ease-in-out, lightningFlash 4s infinite; filter: brightness(0.6); }
 
 /* --- MAP & HUD --- */
 .map-container-hero { width: 100%; height: 600px; border-radius: var(--radius-md); overflow: hidden; border: 2px solid rgba(0, 240, 255, 0.3); box-shadow: 0 0 30px rgba(0, 240, 255, 0.1); z-index: var(--z-map); position: relative; }
@@ -206,13 +211,14 @@ input:disabled { opacity: 0.3; cursor: not-allowed; border-left-color: var(--acc
 .mini-btn:hover { background: #fff; color: #000; }
 .track-btn.active { background: rgba(255, 184, 0, 0.15); color: var(--accent-warning); border-color: var(--accent-warning); }
 .remove-btn:hover { background: rgba(255, 0, 85, 0.15); color: var(--accent-danger); border-color: var(--accent-danger); }
+
 .status-within { color: var(--brand-primary); text-shadow: 0 0 10px var(--brand-glow); } 
 .status-above { color: var(--accent-success); text-shadow: 0 0 10px rgba(0,255,157,0.4); } 
 .status-below { color: var(--accent-danger); text-shadow: 0 0 10px var(--accent-danger-glow); }
 
 /* --- SVG GRAPH MATRIX --- */
 .svg-container-hero { width: 100%; height: 600px; border-radius: var(--radius-md); border: 2px solid rgba(0, 240, 255, 0.3); box-shadow: inset 0 0 40px rgba(0, 240, 255, 0.1); background: linear-gradient(rgba(0,240,255,0.02) 1px, transparent 1px), linear-gradient(90deg, rgba(0,240,255,0.02) 1px, transparent 1px); background-size: 40px 40px; }
-#graphSvg { width: 100%; height: 100%; display: block; }
+#graphSvg { width: 100%; height: 100%; display: block; filter: drop-shadow(0 0 10px rgba(0,0,0,0.8)); }
 .grid-line { stroke: rgba(0, 240, 255, 0.15); stroke-width: 1; stroke-dasharray: 4 4; }
 .baseline { stroke: var(--brand-primary); stroke-width: 3; filter: drop-shadow(0 0 6px var(--brand-primary)); }
 .limit-line { stroke: rgba(255, 184, 0, 0.6); stroke-width: 2; stroke-dasharray: 6 6; }
@@ -233,7 +239,6 @@ input:disabled { opacity: 0.3; cursor: not-allowed; border-left-color: var(--acc
 .figure-above .figure-readout { fill: var(--accent-success); text-shadow: 0 0 10px var(--accent-success); }
 .figure-below .figure-head, .figure-below line { stroke: var(--accent-danger); filter: drop-shadow(0 0 8px var(--accent-danger)); }
 .figure-below .figure-readout { fill: var(--accent-danger); text-shadow: 0 0 10px var(--accent-danger); }
-
 .live-halo { fill: rgba(255, 184, 0, 0.15); stroke: var(--accent-warning); stroke-width: 2; animation: pulseHalo 1.5s infinite ease-out; }
 .figure-flash .figure-head, .figure-flash line { stroke: var(--accent-danger) !important; filter: drop-shadow(0 0 15px red) !important; }
 
@@ -254,7 +259,6 @@ input:disabled { opacity: 0.3; cursor: not-allowed; border-left-color: var(--acc
 
 /* --- KEYFRAMES --- */
 @keyframes spin { 100% { transform: rotate(360deg); } }
-@keyframes pulseAlert { from { opacity: 0.7; transform: scale(0.98); } to { opacity: 1; transform: scale(1.02); text-shadow: 0 0 15px red; } }
 @keyframes pulseHalo { 0% { r: 10; opacity: 1; stroke-width: 3;} 100% { r: 45; opacity: 0; stroke-width: 0;} }
 @keyframes slideDown { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
 @keyframes floatSOS { 0% { transform: translateY(0); box-shadow: 0 10px 30px rgba(255,0,85,0.5); } 50% { transform: translateY(-6px); box-shadow: 0 15px 35px rgba(255,0,85,0.8); } 100% { transform: translateY(0); } }
@@ -263,6 +267,11 @@ input:disabled { opacity: 0.3; cursor: not-allowed; border-left-color: var(--acc
 @keyframes rainDrop { 0% { transform: translateY(-10px); opacity: 1; } 100% { transform: translateY(25px); opacity: 0; } }
 @keyframes floatOrb { 0% { transform: translate(0, 0) scale(1); } 100% { transform: translate(30px, 30px) scale(1.05); } }
 @keyframes shineText { 0% { background-position: 200% center; } 100% { background-position: -200% center; } }
+@keyframes lightningFlash {
+    0%, 90%, 100% { filter: brightness(0.6); }
+    92%, 96% { filter: brightness(2.5) drop-shadow(0 0 20px #00f0ff) drop-shadow(0 0 40px #00f0ff); }
+    94% { filter: brightness(0.6); }
+}
 
 /* --- MOBILE RESPONSIVE --- */
 @media (max-width: 1000px) {
