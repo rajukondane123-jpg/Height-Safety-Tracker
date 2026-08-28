@@ -1,16 +1,11 @@
 {
-  "name": "altiguard-enterprise-kernel",
-  "version": "4.0.0",
-  "description": "Enterprise structural safety telemetry, geofencing, and spatial command router.",
+  "name": "altiguard-live-matrix",
+  "version": "1.0.0",
+  "description": "Live GPS & Fall-Alert Telemetry Server",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
     "dev": "nodemon server.js"
-  },
-  "author": "Vaibhav Raju Kondane",
-  "license": "MIT",
-  "engines": {
-    "node": ">=18.0.0"
   },
   "dependencies": {
     "express": "^4.19.2",
