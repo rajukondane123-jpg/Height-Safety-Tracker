@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <meta name="theme-color" content="#030712">
-    <title>Altiguard | Elite Cyber-Tactical Command</title>
+    <title>Worker Monitoring | Tactical Command</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin=""/>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="style.css">
@@ -13,7 +13,7 @@
 
     <header class="app-header">
         <div class="brand">
-            <h1>ALTIGUARD // KERNEL v5</h1>
+            <h1>WORKER MONITORING // KERNEL v5</h1>
             <p>Advanced Spatial Telemetry & Atmospheric Grid</p>
         </div>
         
@@ -26,6 +26,7 @@
 
     <main class="dashboard-grid">
 
+        <!-- 1. GROUP AUTHENTICATION -->
         <section class="panel" id="panelAuth">
             <div class="panel-header"><span class="step-badge">01</span><h2>Admin Command & Connect</h2></div>
             <div class="control-row"><input type="text" id="groupCodeInput" placeholder="Enter Site Code (e.g. TEAM123)" autocomplete="off"></div>
@@ -35,6 +36,7 @@
             </div>
         </section>
 
+        <!-- 2. TELEMETRY INJECTION -->
         <section class="panel" id="panelInput">
             <div class="panel-header"><span class="step-badge">02</span><h2>Node Identity & Sensor Link</h2></div>
             <form id="addForm" onsubmit="return false;">
@@ -65,6 +67,7 @@
             </form>
         </section>
 
+        <!-- 3. LIVE METEOROLOGICAL DATA -->
         <section class="panel panel-large" id="panelWeather">
             <div class="panel-header"><span class="step-badge">03</span><h2>Live Atmospheric Telemetry</h2></div>
             <div id="weatherWidget" class="weather-grid">
@@ -83,22 +86,26 @@
             </div>
         </section>
 
+        <!-- 4. ACTIVE ROSTER -->
         <section class="panel panel-large" id="panelRoster">
             <div class="panel-header"><span class="step-badge">04</span><h2>Active Personnel Grid</h2></div>
             <div id="emptyHint" class="empty-state"><div class="spinner"></div><p>AWAITING HARDWARE UPLINK...</p></div>
             <ul id="rosterList" class="roster-list"></ul>
         </section>
 
+        <!-- 5. MASSIVE MAP WINDOW -->
         <section class="panel panel-hero" id="panelMap">
             <div class="panel-header"><span class="step-badge">05</span><h2>Geographic Topography & Geofence Perimeter</h2></div>
             <div class="map-container-hero"><div id="map"></div></div>
         </section>
 
+        <!-- 6. MASSIVE GRAPH WINDOW -->
         <section class="panel panel-hero" id="panelGraph">
             <div class="panel-header"><span class="step-badge">06</span><h2>Spatial Elevation Matrix (Floor Levels)</h2></div>
             <div class="svg-container-hero"><svg id="graphSvg" preserveAspectRatio="xMidYMid meet"></svg></div>
         </section>
 
+        <!-- 7. ADMIN CONFIGURATION -->
         <section class="panel" id="panelConfig">
             <div class="panel-header"><span class="step-badge">07</span><h2>Physics & Perimeter Calibration</h2></div>
             <div class="config-grid">
@@ -125,6 +132,7 @@
             <button id="testAlertBtn" class="btn btn-warning full-width mt-10">⚠️ Test Siren</button>
         </section>
 
+        <!-- 8. ALERT CONSOLE -->
         <section class="panel" id="panelLogs">
             <div class="panel-header"><span class="step-badge">08</span><h2>Command Incident Ledger</h2></div>
             <ul id="logList" class="console-logs"></ul>
@@ -137,7 +145,7 @@
     </div>
 
     <div id="alertBanner" class="toast-banner" hidden></div>
-    <div id="devCredit" class="watermark">COETA ALTIGUARD // ENGINEERED BY VAIBHAV RAJU KONDANE</div>
+    <div id="devCredit" class="watermark">COETA WORKER MONITORING // ENGINEERED BY VAIBHAV RAJU KONDANE</div>
 
     <script src="/socket.io/socket.io.js"></script>
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
