@@ -3,42 +3,52 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <meta name="theme-color" content="#030712">
+    <meta name="theme-color" content="#02040a">
     <title>Worker Monitoring | Tactical Command</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin=""/>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;700;800&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;700;800;900&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
+    <!-- Global CRT Scanline Overlay -->
+    <div class="crt-scanlines"></div>
 
     <header class="app-header">
         <div class="brand">
-            <h1>WORKER MONITORING // KERNEL v5</h1>
+            <h1>WORKER MONITORING <span class="version-tag">// KERNEL v5.1</span></h1>
             <p>Advanced Spatial Telemetry & Atmospheric Grid</p>
         </div>
         
         <div id="summaryBar" class="status-hud">
-            <div class="hud-item"><span class="hud-label">Clearance</span><strong id="statRole" class="hud-value highlight">AWAITING...</strong></div>
+            <div class="hud-item"><span class="hud-label">Clearance</span><strong id="statRole" class="hud-value highlight">AWAITING</strong></div>
             <div class="hud-item"><span class="hud-label">Active Nodes</span><strong id="statActive" class="hud-value">0 Tracked</strong></div>
-            <div class="hud-item"><span class="hud-label">System Uplink</span><strong id="statStatus" class="hud-value status-secure">🟢 SECURE</strong></div>
+            <div class="hud-item"><span class="hud-label">Uplink Status</span><strong id="statStatus" class="hud-value status-secure">🟢 SECURE</strong></div>
         </div>
     </header>
 
     <main class="dashboard-grid">
 
-        <!-- 1. GROUP AUTHENTICATION -->
+        <!-- 01. GROUP AUTHENTICATION -->
         <section class="panel" id="panelAuth">
-            <div class="panel-header"><span class="step-badge">01</span><h2>Admin Command & Connect</h2></div>
-            <div class="control-row"><input type="text" id="groupCodeInput" placeholder="Enter Site Code (e.g. TEAM123)" autocomplete="off"></div>
+            <div class="panel-header">
+                <span class="step-badge">01</span>
+                <h2>Admin Command & Connect</h2>
+            </div>
+            <div class="control-row">
+                <input type="text" id="groupCodeInput" placeholder="Enter Site Code (e.g. TEAM123)" autocomplete="off">
+            </div>
             <div class="button-split">
-                <button id="createGroupBtn" class="btn btn-primary">👑 Create as Admin</button>
-                <button id="joinGroupActionBtn" class="btn btn-outline">👷 Join as Worker</button>
+                <button id="createGroupBtn" class="btn btn-primary"><span class="icon">👑</span> Create as Admin</button>
+                <button id="joinGroupActionBtn" class="btn btn-outline"><span class="icon">👷</span> Join as Worker</button>
             </div>
         </section>
 
-        <!-- 2. TELEMETRY INJECTION -->
+        <!-- 02. TELEMETRY INJECTION -->
         <section class="panel" id="panelInput">
-            <div class="panel-header"><span class="step-badge">02</span><h2>Node Identity & Sensor Link</h2></div>
+            <div class="panel-header">
+                <span class="step-badge">02</span>
+                <h2>Node Identity & Sensor Link</h2>
+            </div>
             <form id="addForm" onsubmit="return false;">
                 <div class="input-group">
                     <label>Operator Name</label>
@@ -52,6 +62,7 @@
                     <button type="button" id="captureBtn" class="btn btn-sensor">📍 Auto-Fetch GPS & Altitude</button>
                     <button type="button" id="manualToggle" class="btn btn-text">⚙️ Toggle Manual Entry</button>
                 </div>
+                
                 <div id="gpsReadout" class="gps-readout" hidden></div>
                 
                 <div id="manualFields" class="manual-override" hidden>
@@ -67,12 +78,15 @@
             </form>
         </section>
 
-        <!-- 3. LIVE METEOROLOGICAL DATA -->
+        <!-- 03. LIVE METEOROLOGICAL DATA -->
         <section class="panel panel-large" id="panelWeather">
-            <div class="panel-header"><span class="step-badge">03</span><h2>Live Atmospheric Telemetry</h2></div>
+            <div class="panel-header">
+                <span class="step-badge">03</span>
+                <h2>Live Atmospheric Telemetry</h2>
+            </div>
             <div id="weatherWidget" class="weather-grid">
                 <div class="weather-animation-box" id="weatherIconBox">
-                    <div class="weather-icon-placeholder" style="font-size:10px; color:#64748b; text-align:center; font-family:var(--font-mono);">AWAITING GPS...</div>
+                    <div class="weather-icon-placeholder">AWAITING GPS...</div>
                 </div>
                 <div class="weather-data-box">
                     <div class="w-stat"><span class="w-label">Temp</span><strong id="wTemp">--°C</strong></div>
@@ -81,33 +95,53 @@
                     <div class="w-stat"><span class="w-label">Wind Speed</span><strong id="wWind">-- km/h</strong></div>
                     <div class="w-stat"><span class="w-label">Pressure</span><strong id="wPress">-- hPa</strong></div>
                     <div class="w-stat"><span class="w-label">Air Quality (AQI)</span><strong id="wAqi" class="aqi-badge">--</strong></div>
-                    <div class="w-stat" style="grid-column: span 2;"><span class="w-label">Condition</span><strong id="wCondition" style="color:var(--brand-primary); font-size:1.6rem; text-shadow: 0 0 15px var(--brand-glow);">--</strong></div>
+                    <div class="w-stat w-stat-wide"><span class="w-label">Condition</span><strong id="wCondition" class="condition-text">--</strong></div>
                 </div>
             </div>
         </section>
 
-        <!-- 4. ACTIVE ROSTER -->
+        <!-- 04. ACTIVE ROSTER -->
         <section class="panel panel-large" id="panelRoster">
-            <div class="panel-header"><span class="step-badge">04</span><h2>Active Personnel Grid</h2></div>
-            <div id="emptyHint" class="empty-state"><div class="spinner"></div><p>AWAITING HARDWARE UPLINK...</p></div>
+            <div class="panel-header">
+                <span class="step-badge">04</span>
+                <h2>Active Personnel Grid</h2>
+            </div>
+            <div id="emptyHint" class="empty-state">
+                <div class="spinner"></div>
+                <p>AWAITING HARDWARE UPLINK...</p>
+            </div>
             <ul id="rosterList" class="roster-list"></ul>
         </section>
 
-        <!-- 5. MASSIVE MAP WINDOW -->
+        <!-- 05. MASSIVE MAP WINDOW -->
         <section class="panel panel-hero" id="panelMap">
-            <div class="panel-header"><span class="step-badge">05</span><h2>Geographic Topography & Geofence Perimeter</h2></div>
-            <div class="map-container-hero"><div id="map"></div></div>
+            <div class="panel-header">
+                <span class="step-badge">05</span>
+                <h2>Geographic Topography & Perimeter</h2>
+            </div>
+            <div class="map-container-hero">
+                <div id="map"></div>
+                <div class="map-overlay-corners"></div>
+            </div>
         </section>
 
-        <!-- 6. MASSIVE GRAPH WINDOW -->
+        <!-- 06. MASSIVE GRAPH WINDOW -->
         <section class="panel panel-hero" id="panelGraph">
-            <div class="panel-header"><span class="step-badge">06</span><h2>Spatial Elevation Matrix (Floor Levels)</h2></div>
-            <div class="svg-container-hero"><svg id="graphSvg" preserveAspectRatio="xMidYMid meet"></svg></div>
+            <div class="panel-header">
+                <span class="step-badge">06</span>
+                <h2>Spatial Elevation Matrix (Floor Levels)</h2>
+            </div>
+            <div class="svg-container-hero">
+                <svg id="graphSvg" preserveAspectRatio="xMidYMid meet"></svg>
+            </div>
         </section>
 
-        <!-- 7. ADMIN CONFIGURATION -->
+        <!-- 07. ADMIN CONFIGURATION -->
         <section class="panel" id="panelConfig">
-            <div class="panel-header"><span class="step-badge">07</span><h2>Physics & Perimeter Calibration</h2></div>
+            <div class="panel-header">
+                <span class="step-badge">07</span>
+                <h2>Physics & Perimeter Calibration</h2>
+            </div>
             <div class="config-grid">
                 <div class="input-group">
                     <label>Secret Alert Channel (Ntfy.sh Topic)</label>
@@ -132,16 +166,22 @@
             <button id="testAlertBtn" class="btn btn-warning full-width mt-10">⚠️ Test Siren</button>
         </section>
 
-        <!-- 8. ALERT CONSOLE -->
+        <!-- 08. ALERT CONSOLE -->
         <section class="panel" id="panelLogs">
-            <div class="panel-header"><span class="step-badge">08</span><h2>Command Incident Ledger</h2></div>
+            <div class="panel-header">
+                <span class="step-badge">08</span>
+                <h2>Command Incident Ledger</h2>
+            </div>
             <ul id="logList" class="console-logs"></ul>
         </section>
 
     </main>
 
     <div class="fab-container">
-        <button id="sosTriggerBtn" class="fab-btn fab-sos">🚨 INITIATE SOS</button>
+        <button id="sosTriggerBtn" class="fab-btn fab-sos">
+            <span class="pulse-ring"></span>
+            🚨 INITIATE SOS
+        </button>
     </div>
 
     <div id="alertBanner" class="toast-banner" hidden></div>
